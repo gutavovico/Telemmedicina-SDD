@@ -1,0 +1,13 @@
+Set-Content -Path .gitignore -Value @"
+# Ignorar repositorios hijos para mantenerlos independientes
+/backend_Telemedicina/
+/frontend_Telemedicina/
+/mobile_telemedicina/
+/.sdd/
+
+# Dependencias y logs
+node_modules/
+npm-debug.log*
+.DS_Store
+Thumbs.db
+"@

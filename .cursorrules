@@ -1,0 +1,39 @@
+# Cursor Rules - Plataforma SaaS Multitenant de Telemedicina
+
+You are working on a Cloud SaaS Multitenant Telemedicine Platform orchestrated via Spec-Driven Development (SDD) with OpenSpec.
+
+## 1. Golden Rule: Spec-Driven Development (SDD)
+- NEVER write or modify production code without checking the specifications in `openspec/specs/` and API contracts in `openspec/contracts/`.
+- The specs and contracts are the Single Source of Truth. Do not invent endpoints, fields, or database columns.
+- All new requirements must follow the OpenSpec change lifecycle (`openspec/changes/`).
+
+## 2. Multitenancy & Data Isolation Rules
+- Architecture: Pool with Discriminator (Shared Database, Shared Schema) in PostgreSQL (Neon Serverless).
+- Every transactional table MUST have `tenant_id: UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE`.
+- Uniqueness constraints MUST be composite with `tenant_id`: `UNIQUE(tenant_id, ci)` and `UNIQUE(tenant_id, correo)`.
+- Backend MUST filter every query with `WHERE tenant_id = :current_tenant_id`.
+- Tenant is resolved via JWT claim `tenant_id` or HTTP header `X-Tenant-ID: <UUID>` using `get_current_tenant`.
+- Cross-tenant access must return `404 Not Found` (to avoid data leak).
+- Never accept `tenant_id` from client request bodies in creation endpoints (Tenant Injection protection).
+
+## 3. Backend Standards (FastAPI + Python 3.11+)
+- Modular domain structure with use case separation: `app/modules/<dominio>/<caso_de_uso>/` (`router.py`, `service.py`, `schemas.py`, `models.py`, `dependencies.py`).
+- Strict SQLAlchemy 2.0 async syntax (`select()`, `execute()`, `scalars()`). NEVER use `session.query()`.
+- Alembic for all schema migrations.
+- Pydantic v2 (`ConfigDict(from_attributes=True)`, `@field_validator`).
+- Semantic HTTP status codes: 200, 201, 400, 401, 403, 404, 409, 422.
+
+## 4. Frontend Web Standards (Angular + TypeScript)
+- Standalone Components (`standalone: true`). No `NgModule`.
+- Modern reactivity using Signals (`signal()`, `computed()`, `effect()`).
+- Strongly typed Reactive Forms matching OpenSpec validation rules.
+- Fully typed API consumption matching `openspec/contracts/*.md`. No `any`.
+- Functional HTTP Interceptors injecting `Authorization: Bearer <token>` and `X-Tenant-ID: <UUID>`.
+
+## 5. Mobile Standards (Flutter + Dart)
+- Clean Architecture by layers: `data/`, `domain/`, `presentation/` inside each `lib/features/<feature>/`.
+- Reactive state management with Provider / ChangeNotifier or BLoC (`Initial`, `Loading`, `Success`, `Error`).
+- Serializable models with `fromJson` and `toJson` strictly aligned with OpenSpec contracts.
+- Secure storage for JWT token and `tenant_id` using `FlutterSecureStorage`.
+
+Refer to `AGENTS.md` and `.agents/skills/` for in-depth guidance.

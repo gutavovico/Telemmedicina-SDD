@@ -1,0 +1,25 @@
+schema: spec-driven
+
+# Project context
+context: |
+  Proyecto: Plataforma Web y Móvil SaaS Multitenant de Telemedicina General y Especializada con Gestión Dinámica de Fichas Médicas.
+  Modelo de Servicio: SaaS Cloud Multitenant (Shared Database, Shared Schema) con aislamiento por discriminador tenant_id (UUID).
+  Backend: FastAPI (Python 3.11+), arquitectura modular por dominio con separación interna por casos de uso (app/modules/<dominio>/<caso_de_uso>/), SQLAlchemy 2.0, Pydantic v2, Alembic.
+  Frontend Web: Angular (TypeScript), Standalone Components, Signals, Reactive Forms, Tailwind CSS.
+  Frontend Móvil: Flutter (Dart), arquitectura por capas (Data, Domain, Presentation), Provider, Material 3.
+  Base de Datos: PostgreSQL (Neon Serverless) con clave de inquilino tenant_id indexada en tablas transaccionales.
+  Resolución de Tenant: Header HTTP X-Tenant-ID o claim tenant_id en token JWT, inyección de dependencia get_current_tenant.
+  Metodología: Spec-Driven Development (SDD) orquestado vía OpenSpec.
+  Ver arquitectura y especificaciones completas en openspec/project.md.
+
+# Per-artifact rules
+rules:
+  proposal:
+    - "Include architectural impact, domain boundaries, tenant isolation, and use case mapping"
+    - "Specify dependencies across Backend (FastAPI), Web (Angular), and Mobile (Flutter)"
+  specs:
+    - "Keep requirements testable, enforcing tenant isolation and formal Gherkin scenarios"
+    - "Define domain entity models, composite unique keys with tenant_id, and data dictionary"
+  tasks:
+    - "Separate tasks by layer: Database/Migrations, Backend (FastAPI), Web (Angular), Mobile (Flutter), and Tests"
+    - "Require verification against Gherkin scenarios before marking complete"
