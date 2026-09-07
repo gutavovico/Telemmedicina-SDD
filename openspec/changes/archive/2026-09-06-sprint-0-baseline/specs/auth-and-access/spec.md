@@ -63,7 +63,7 @@ The system SHALL revocar inmediatamente la sesión del usuario al solicitar el c
 - **AND** cualquier intento posterior de usar el token previo o refrescar la sesión resulta en código HTTP `401 Unauthorized`
 
 ### Requirement: Recuperación de Acceso mediante Código Temporal (CU23)
-The system SHALL proveer un mecanismo seguro de restablecimiento de contraseña mediante códigos numéricos de 6 dígitos generados criptográficamente con HMAC-SHA256 con caducidad de 30 minutos, limitación de tasa de 5 intentos y respuesta genérica.
+The system SHALL proveer un mecanismo seguro de restablecimiento de contraseña mediante códigos numéricos de 6 dígitos generados criptográficamente con HMAC-SHA256 con caducidad de 30 minutos, despachando un correo electrónico con dicho código vía SMTP al usuario si la cuenta existe y está activa, con limitación de tasa de 5 intentos, validación contractual de contraseña de mínimo 8 caracteres y respuesta genérica preventiva de enumeración.
 
 #### Scenario: Solicitud de código de recuperación con correo registrado
 - **GIVEN** que existe un usuario activo con correo "admin@telemedicina.com"
@@ -71,13 +71,14 @@ The system SHALL proveer un mecanismo seguro de restablecimiento de contraseña 
 - **THEN** el sistema responde con código HTTP `200 OK`
 - **AND** el cuerpo de la respuesta contiene la confirmación genérica "Si el correo está registrado, recibirás un código de recuperación."
 - **AND** se genera un código de 6 dígitos asociado a una ventana de 30 minutos
+- **AND** el sistema despacha un correo electrónico vía SMTP con el código de 6 dígitos a "admin@telemedicina.com"
 
 #### Scenario: Solicitud de código con correo no registrado (Anti-Enumeration)
 - **GIVEN** que el correo "noexiste@externo.com" no está registrado en el sistema
 - **WHEN** envía una solicitud `POST /api/v1/auth/forgot-password` con dicho correo
 - **THEN** el sistema responde con código HTTP `200 OK`
 - **AND** el mensaje es idéntico: "Si el correo está registrado, recibirás un código de recuperación."
-- **AND** no se filtra información sobre la existencia de la cuenta
+- **AND** no se filtra información sobre la existencia de la cuenta ni se despacha correo electrónico
 
 #### Scenario: Restablecimiento exitoso de contraseña con código válido
 - **GIVEN** que se emitió un código de recuperación válido para "admin@telemedicina.com" hace menos de 30 minutos
@@ -93,6 +94,12 @@ The system SHALL proveer un mecanismo seguro de restablecimiento de contraseña 
 - **AND** el mensaje indica "Contraseña restablecida exitosamente."
 - **AND** el hash de la contraseña en la base de datos se actualiza con el nuevo valor
 - **AND** el usuario puede iniciar sesión de inmediato con "nuevaAdmin123"
+
+#### Scenario: Rechazo de contraseña con longitud inferior a 8 caracteres (Validación Contractual)
+- **GIVEN** que se emitió un código de recuperación válido para un usuario registrado
+- **WHEN** el usuario intenta restablecer su contraseña enviando un valor en "nueva_password" con menos de 8 caracteres (ej. "123456")
+- **THEN** el formulario web en Angular bloquea el envío impidiendo la acción y notificando "Mínimo 8 caracteres."
+- **AND** si la solicitud llega al backend `POST /api/v1/auth/reset-password`, este responde con código HTTP `422 Unprocessable Entity`
 
 #### Scenario: Bloqueo por exceso de intentos fallidos en recuperación de contraseña (Rate Limiting)
 - **GIVEN** que un usuario ingresa códigos erróneos sucesivamente para un correo
