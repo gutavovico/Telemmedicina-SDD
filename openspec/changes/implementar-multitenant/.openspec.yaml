@@ -1,0 +1,30 @@
+schema: change.1
+name: implementar-multitenant
+version: 1.0.0
+title: Implementar Aislamiento Multitenant
+description: |
+  Implementa el modelo multitenant Pool con Discriminador (Shared Database, Shared Schema)
+  para garantizar el aislamiento estricto de datos entre clínicas (tenants).
+status: draft
+priority: high
+domain: platform
+capabilities:
+  - multitenant-isolation
+  - tenant-resolution
+  - data-access-control
+affected-modules:
+  - auth
+  - clinicas
+  - appointments
+  - medical_records
+  - communications
+specs-created:
+  - multitenant
+specs-modified:
+  - audit-log
+contracts-created:
+  - tenant-context
+contracts-modified:
+  - auth
+  - users
+  - patients

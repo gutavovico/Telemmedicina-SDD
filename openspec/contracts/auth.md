@@ -88,6 +88,7 @@
   "id_usuario": 1,
   "tenant_id": "11111111-1111-1111-1111-111111111111",
   "id_rol": 1,
+  "rol": "Administrador",
   "nombres": "Administrador",
   "apellidos": "General",
   "correo": "admin@telemedicina.com",
