@@ -22,6 +22,21 @@ Esta especificación formaliza la capa de experiencia de usuario y arquitectura 
 3. **Aislamiento Multitenant Transversal:** Implementar la propagación determinista del `tenant_id` y del token JWT en cada interacción de red, protegiendo las credenciales en almacenamiento seguro y gestionando de forma semántica las respuestas de aislamiento (`401`, `403`, `404`, `422`).
 4. **Trazabilidad Integral por Caso de Uso:** Asegurar que cada pantalla, vista o diálogo en Web y Móvil esté vinculado a su correspondiente contrato de API en `openspec/contracts/` y restringido por guardias de navegación RBAC.
 
+
+### 2. Matriz Canónica de Distribución de Casos de Uso (Arquitectura de 6 Paquetes)
+Como Fuente Única de Verdad (Single Source of Truth) inmutable para todo el ecosistema de Telemedicina (Backend FastAPI, Frontend Angular, Móvil Flutter y Especificaciones OpenSpec), todos los casos de uso, modelos, controladores, servicios, componentes, rutas, contratos y entidades se distribuyen obligatoriamente bajo los 6 paquetes canónicos oficiales:
+
+| Paquete Canónico | Casos de Uso Oficiales | Alcance y Responsabilidad Arquitectural |
+|---|---|---|
+| **auth** | **CU01** (Login), **CU02** (Gestión Usuarios), **CU21** (Bitácora Auditoría Acceso/Clínica), **CU23** (Recuperar Acceso), **CU24** (Logout), **CU26** (Roles y Permisos) | Autenticación multitenant, control de acceso RBAC, recuperación de cuentas, auditoría y bitácora clínica/accesos. |
+| **medical_records**<br>*(o medical-records en Web)* | **CU03** (Pacientes/Expediente), **CU04** (Perfil Profesional Médico), **CU09** (Fichas Clínicas), **CU10** (Solicitud Laboratorios), **CU11** (Resultados Laboratorio), **CU12** (Documentos Clínicos/Exámenes), **CU16** (Recetas Digitales), **CU28** (Historia Clínica Electrónica Dinámica) | Expedientes de pacientes, perfiles médicos, fichas clínicas dinámicas, órdenes y resultados de laboratorios, recetas y documentos clínicos. |
+| **appointments** | **CU05** (Agenda Médica), **CU06** (Búsqueda Especialistas), **CU07** (Lista de Espera), **CU08** (Tiempo de Espera Live Queue), **CU25** (Gestión Consultas Médicas) | Agendamiento de citas, catálogos y búsqueda de especialistas, colas de espera en vivo y gestión integral de consultas. |
+| **communications** | **CU14** (Teleconsulta WebRTC), **CU15** (Chat y Mensajería) | Salas de videoconferencia médica WebRTC en tiempo real, señalización y mensajería/chat clínico seguro. |
+| **ai_assistant**<br>*(o ai-assistant en Web)* | **CU13** (Triaje Preliminar IA), **CU17** (Monitoreo Tratamientos), **CU18** (Asistencia Inteligente) | Triaje clínico asistido por IA, recomendaciones y seguimiento predictivo de adherencia a tratamientos. |
+| **analytics** | **CU19** (Procesar Pagos), **CU20** (Notificaciones/Recordatorios), **CU22** (Reportes Clínicos/Administrativos) | Pasarela y procesamiento de pagos, mensajería de notificaciones/recordatorios y reportería/analítica institucional. |
+
+> **Regla Canónica Inmutable:** Cualquier modelo, controlador, servicio, componente, ruta, contrato o entidad que provenga de las ramas debe alojarse obligatoriamente según esta matriz documentada. Queda prohibida la persistencia de carpetas legadas dispersas (ej. `features/medicos/`, `features/users/`, `features/consultas/`, o modelos sueltos en raíz).
+
 ---
 
 ## Design System & Tokens (Stitch Export)
@@ -244,6 +259,17 @@ class TenantInterceptor extends Interceptor {
 ---
 
 ## Requirements
+
+### Requirement: Distribución Canónica Modular y Matriz de Casos de Uso
+The system SHALL estructurar y alojar todos los modelos, controladores, servicios, componentes, rutas, contratos y entidades en los 6 paquetes canónicos oficiales (auth, medical_records / medical-records, appointments, communications, ai_assistant / ai-assistant, analytics), respetando estrictamente la Matriz de Distribución Canónica de Casos de Uso como Fuente Única de Verdad inmutable.
+
+#### Scenario: Reubicación canónica de artefactos legados o descentralizados
+- **GIVEN** que una rama o incremento introduce componentes, controladores, entidades o rutas en carpetas legadas (ej. features/medicos/, features/users/, features/consultas/, o modelos sueltos en models/)
+- **WHEN** se realiza el proceso de integración continua o fusión a la rama main
+- **THEN** el sistema y la arquitectura exigen la migración no destructiva y reubicación obligatoria del artefacto dentro de su paquete canónico oficial correspondiente
+- **AND** actualiza todas las rutas, imports y configuraciones para mantener cero regresiones y cero rutas rotas
+
+---
 
 ### Requirement: Consistencia y Uniformidad de Tokens de Diseño
 The system SHALL aplicar de forma idéntica e inmutable la paleta cromática, escalas tipográficas y elevaciones definidas en esta especificación en todas las interfaces del Portal Web (Angular con Tailwind CSS v4) y de la Aplicación Móvil (Flutter con Material 3), prohibiendo el uso de colores hexadecimales arbitrarios o estilos ad-hoc no registrados en el catálogo de tokens.
