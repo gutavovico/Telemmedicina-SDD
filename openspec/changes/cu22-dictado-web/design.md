@@ -1,0 +1,9 @@
+# Diseño
+
+`analytics/reportes/transcription_client.py` adapta el endpoint de audio de Groq con `httpx`; `transcription_service.py` valida bytes y formatos, sin SQL. `reportes/router.py` comparte `require_report_admin`. Se reutilizan `GROQ_API_KEY` y errores del proveedor. La web coloca la captura de MediaRecorder en un servicio del caso de uso y conserva la barra existente.
+
+Se aceptan WebM, Ogg, MP4 y WAV con comprobación de firma, MIME y extensión; 5 MiB limitados al leer. El cliente detiene a 60 segundos; el servidor no mide duración ni decodifica íntegramente. No se guardan archivos. La respuesta textual puede contener errores ante ruido o silencio y siempre queda editable antes de interpretarse.
+
+Groq documenta [audio/transcriptions y los modelos Whisper](https://console.groq.com/docs/speech-to-text). Se usa `whisper-large-v3` por su precisión multilingüe y se deja configurable el modelo y timeout. El parser multipart de Starlette puede usar un archivo temporal; se cierra el `UploadFile` después de cada resultado.
+
+«Enviar al terminar» es un estado local web, inicialmente falso. Se captura al iniciar la grabación y solo una pulsación explícita en Detener permite llamar al mismo método `interpretText(true)` de Enviar después de colocar la transcripción. El límite de 60 segundos, errores y cancelaciones conservan el flujo manual. Una versión de edición detecta cambios del texto incluso si se revierten; otra versión detecta acciones sobre filtros, generación, paginación, exportación o catálogo. La sesión, destrucción del componente, dictado pendiente y respuesta válida se verifican antes de enviar. Las aclaraciones y rechazos siguen deteniendo la cadena en el servicio de interpretación existente. No cambia el contrato HTTP ni se envía el texto automáticamente al incorporar un dictado pendiente.
