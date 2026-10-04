@@ -6,6 +6,7 @@
 
 # Dependencias y logs
 node_modules/
+.venv/
 npm-debug.log*
 .DS_Store
 Thumbs.db
