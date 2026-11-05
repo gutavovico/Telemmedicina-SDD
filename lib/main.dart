@@ -3,12 +3,16 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/ai_assistant/presentation/providers/asistencia_provider.dart';
+import 'core/notifications/push_service.dart';
 import 'features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import 'features/analytics/reportes/presentation/screens/reports_screen.dart';
 import 'features/appointments/presentation/controllers/doctor_controller.dart';
 import 'features/appointments/presentation/providers/appointment_provider.dart';
 import 'features/appointments/presentation/screens/appointments_screen.dart';
 import 'features/appointments/presentation/screens/doctor_catalog_screen.dart';
+import 'features/appointments/specialist_search/data/repositories/specialist_search_repository_impl.dart';
+import 'features/appointments/specialist_search/presentation/providers/specialist_search_provider.dart';
+import 'features/appointments/specialist_search/presentation/screens/specialist_search_screen.dart';
 import 'features/auth/presentation/controllers/auth_controller.dart';
 import 'features/auth/presentation/screens/forgot_password_screen.dart';
 import 'features/auth/presentation/screens/login_screen.dart';
@@ -33,6 +37,9 @@ import 'features/appointments/presentation/screens/mis_citas_screen.dart';
 import 'features/cola_virtual/presentation/providers/cola_provider.dart';
 import 'features/cola_virtual/presentation/screens/cola_operativa_screen.dart';
 import 'features/cola_virtual/presentation/screens/mi_turno_screen.dart';
+import 'features/payments/presentation/providers/payment_provider.dart';
+import 'features/payments/presentation/screens/payment_checkout_screen.dart';
+import 'features/payments/presentation/screens/payment_history_screen.dart';
 import 'features/teleconsulta/presentation/providers/teleconsulta_provider.dart';
 import 'features/teleconsulta/presentation/screens/teleconsultas_list_screen.dart';
 import 'features/teleconsulta/presentation/screens/sala_espera_screen.dart';
@@ -40,6 +47,9 @@ import 'features/teleconsulta/presentation/screens/videollamada_movil_screen.dar
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // CU19: push solo en la APK Android; en web no hace nada.
+  await PushService.instance.initialize();
 
   // Set status bar styling
   SystemChrome.setSystemUIOverlayStyle(
@@ -63,12 +73,19 @@ class TelemedicinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AuthController()),
         ChangeNotifierProvider(create: (_) => PatientProvider()),
         ChangeNotifierProvider(create: (_) => DoctorController()),
+        ChangeNotifierProvider(
+          create: (_) => SpecialistSearchProvider(
+            repository: SpecialistSearchRepositoryImpl(),
+          ),
+        ),
         ChangeNotifierProvider(create: (_) => AppointmentProvider()),
         ChangeNotifierProvider(create: (_) => TeleconsultaProvider()),
         ChangeNotifierProvider(create: (_) => ColaProvider()),
         ChangeNotifierProvider(create: (_) => FichaProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalDocumentsProvider()),
         ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
+        // CU19: pagos en línea y comprobantes digitales.
+        ChangeNotifierProvider(create: (_) => PaymentProvider()),
         // CU16: el provider emite `sessionExpired` una sola vez por ciclo ante 401.
         // El coordinador reutiliza AuthController.logout (limpieza segura) y
         // redirige a /login sin navegar desde Domain/Data.
@@ -104,6 +121,9 @@ class TelemedicinaApp extends StatelessWidget {
               const PatientOnlyRoute(child: PatientProfileScreen()),
           '/triage': (context) => TriagePage(),
           '/doctors': (context) => const DoctorCatalogScreen(),
+          '/especialistas': (context) => SpecialistSearchScreen(
+            provider: context.read<SpecialistSearchProvider>(),
+          ),
           '/appointments': (context) => const AppointmentsScreen(),
           '/citas': (context) => const MisCitasScreen(),
           '/mis-citas': (context) => const MisCitasScreen(),
@@ -117,10 +137,26 @@ class TelemedicinaApp extends StatelessWidget {
               const PatientOnlyRoute(child: DocumentsListScreen()),
           '/recetas': (context) =>
               const PatientOnlyRoute(child: MisRecetasScreen()),
+          // CU19: pago de citas/teleconsultas y comprobantes.
+          '/pagos': (context) =>
+              const PatientOnlyRoute(child: PaymentHistoryScreen()),
+          '/pagos/checkout': (context) {
+            final args = ModalRoute.of(context)?.settings.arguments;
+            int? idCita;
+            if (args is int) {
+              idCita = args;
+            } else if (args is Map && args['idCita'] is int) {
+              idCita = args['idCita'] as int;
+            }
+            return PatientOnlyRoute(
+              child: PaymentCheckoutScreen(idCita: idCita),
+            );
+          },
           '/communications': (context) => const TeleconsultasListScreen(),
           '/teleconsultas': (context) => const TeleconsultasListScreen(),
           '/teleconsulta/sala-espera': (context) => const SalaEsperaScreen(),
-          '/teleconsulta/videollamada': (context) => const VideollamadaMovilScreen(),
+          '/teleconsulta/videollamada': (context) =>
+              const VideollamadaMovilScreen(),
           '/analytics': (context) => const ReportsScreen(),
           '/ai-assistant': (context) => const PatientOnlyRoute(child: AiAssistantScreen()),
         },

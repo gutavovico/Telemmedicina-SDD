@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../../../../core/network/api_exceptions.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/config/api_config.dart';
+import '../../../../core/notifications/push_service.dart';
 import '../../../../core/storage/secure_storage_service.dart';
 import '../../data/datasources/auth_remote_datasource.dart';
 import '../../data/models/auth_models.dart';
@@ -274,6 +275,8 @@ class AuthController extends ChangeNotifier {
       }
       if (epoch != _sessionEpoch) return false;
       unawaited(verifyReportsAccess());
+      // CU19: registra el token FCM del móvil tras iniciar sesión.
+      unawaited(PushService.instance.registerCurrentToken());
 
       _isLoading = false;
       notifyListeners();
@@ -426,6 +429,12 @@ class AuthController extends ChangeNotifier {
     _isCheckingAuth = false;
     notifyListeners();
     try {
+      // CU19: desactiva el dispositivo antes de invalidar la sesión.
+      try {
+        await PushService.instance.unregisterDevice();
+      } catch (_) {
+        // El cierre de sesión debe continuar aunque falle la revocación push.
+      }
       final refreshToken = await _storageService.getRefreshToken();
       await _remoteDataSource.logout(refreshToken);
     } catch (_) {

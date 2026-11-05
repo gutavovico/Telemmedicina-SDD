@@ -25,7 +25,11 @@ class HomeScreen extends StatelessWidget {
                 color: Colors.white24,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.local_hospital_rounded, color: Colors.white, size: 20),
+              child: const Icon(
+                Icons.local_hospital_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
             ),
             const SizedBox(width: 10),
             Expanded(
@@ -63,16 +67,22 @@ class HomeScreen extends StatelessWidget {
               final confirm = await showDialog<bool>(
                 context: context,
                 builder: (ctx) => AlertDialog(
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
                   title: const Text('Cerrar Sesión'),
-                  content: const Text('¿Estás seguro de que deseas salir de tu cuenta?'),
+                  content: const Text(
+                    '¿Estás seguro de que deseas salir de tu cuenta?',
+                  ),
                   actions: [
                     TextButton(
                       onPressed: () => Navigator.of(ctx).pop(false),
                       child: const Text('Cancelar'),
                     ),
                     ElevatedButton(
-                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.error,
+                      ),
                       onPressed: () => Navigator.of(ctx).pop(true),
                       child: const Text('Cerrar Sesión'),
                     ),
@@ -151,7 +161,10 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: AppColors.secondaryContainer,
                           borderRadius: BorderRadius.circular(12),
@@ -176,12 +189,18 @@ class HomeScreen extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        const Icon(Icons.check_circle_rounded, color: AppColors.secondaryContainer, size: 20),
+                        const Icon(
+                          Icons.check_circle_rounded,
+                          color: AppColors.secondaryContainer,
+                          size: 20,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
                             'Tu sesión se encuentra activa y segura.',
-                            style: AppTypography.bodySmall.copyWith(color: Colors.white),
+                            style: AppTypography.bodySmall.copyWith(
+                              color: Colors.white,
+                            ),
                           ),
                         ),
                       ],
@@ -195,7 +214,9 @@ class HomeScreen extends StatelessWidget {
             // Quick Access Section
             Text(
               'Servicios Disponibles',
-              style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w700),
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
             ),
             const SizedBox(height: 14),
 
@@ -213,6 +234,13 @@ class HomeScreen extends StatelessWidget {
                   subtitle: 'Atención virtual en tiempo real',
                   color: AppColors.primary,
                   onTap: () {},
+                ),
+                _buildServiceCard(
+                  icon: Icons.person_search_rounded,
+                  title: 'Buscar especialistas',
+                  subtitle: 'Encuentra médicos por especialidad y horario',
+                  color: AppColors.tealAccent,
+                  onTap: () => Navigator.pushNamed(context, '/especialistas'),
                 ),
                 _buildServiceCard(
                   icon: Icons.calendar_month_rounded,

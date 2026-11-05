@@ -33,6 +33,9 @@ class ApiConfig {
   static String get doctorsUrl => '$baseUrl/api/v1/medicos';
   static String get specialtiesUrl => '$baseUrl/api/v1/especialidades';
 
+  // Directorio de especialistas y disponibilidad (CU06)
+  static String get specialistsUrl => '$baseUrl/api/v1/especialistas';
+
   // Citas y Consultas (Appointments - CU25)
   static String get appointmentsUrl => '$baseUrl/citas';
   static String get availableSlotsUrl => '$baseUrl/citas/horarios-disponibles';
@@ -43,7 +46,8 @@ class ApiConfig {
   // Documentos Clínicos (Medical Records - CU12)
   static String get documentsUrl => '$baseUrl/api/v1/documentos';
   static String get myDocumentsUrl => '$baseUrl/api/v1/documentos/me';
-  static String patientDocumentsUrl(int id) => '$baseUrl/api/v1/pacientes/$id/documentos';
+  static String patientDocumentsUrl(int id) =>
+      '$baseUrl/api/v1/pacientes/$id/documentos';
   static String documentDetailUrl(int id) => '$baseUrl/api/v1/documentos/$id';
   static String documentDownloadUrl(int id) =>
       '$baseUrl/api/v1/documentos/$id/download';
@@ -60,29 +64,56 @@ class ApiConfig {
   static String get assistanceCatalogUrl => '$baseUrl/api/v1/asistencia-tratamiento/interacciones/catalogo';
 
   // Teleconsulta y Chat de Cita Médica (CU15)
-  static String teleconsultaUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/teleconsulta';
-  static String get myTeleconsultaUrl => '$baseUrl/api/v1/citas/me/teleconsulta';
-  static String chatMensajesUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
+  static String teleconsultaUrl(int idCita) =>
+      '$baseUrl/api/v1/citas/$idCita/teleconsulta';
+  static String get myTeleconsultaUrl =>
+      '$baseUrl/api/v1/citas/me/teleconsulta';
+  static String chatMensajesUrl(int idCita) =>
+      '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
 
   // CU22/CU27 reportes; el backend resuelve id_clinica desde la sesión.
   static String get reportCatalogUrl => '$baseUrl/analytics/reportes/catalogo';
   static String get reportOptionsUrl => '$baseUrl/analytics/reportes/opciones';
   static String get reportQueryUrl => '$baseUrl/analytics/reportes/consulta';
   static String get reportExportUrl => '$baseUrl/analytics/reportes/exportar';
-  static String get reportInterpretUrl => '$baseUrl/analytics/reportes/interpretar';
-  static String get reportTranscribeUrl => '$baseUrl/analytics/reportes/transcribir';
+  static String get reportInterpretUrl =>
+      '$baseUrl/analytics/reportes/interpretar';
+  static String get reportTranscribeUrl =>
+      '$baseUrl/analytics/reportes/transcribir';
+  // Pagos de citas y teleconsultas + comprobantes (CU19)
+  static String get paymentsUrl => '$baseUrl/pagos';
+  static String get paymentsCheckoutUrl => '$baseUrl/pagos/checkout';
+  static String get paymentsPendingUrl => '$baseUrl/pagos/pendientes';
+  static String get paymentsMineUrl => '$baseUrl/pagos/mis-pagos';
+  static String get paymentsStateUrl => '$baseUrl/pagos/estado-pasarela';
+  static String paymentUrl(int idPago) => '$baseUrl/pagos/$idPago';
+  static String paymentSyncUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/sincronizar';
+  static String paymentSimulateUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/simular-pago';
+  static String paymentReceiptUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/comprobante/pdf';
+
+  // Notificaciones push del móvil (CU19)
+  static String get pushDevicesUrl => '$baseUrl/notificaciones/dispositivos';
+  static String pushDeviceUrl(int id) => '$baseUrl/notificaciones/dispositivos/$id';
+
   // Fila virtual y tiempos de espera (CU08)
   static String get liveQueueUrl => '$baseUrl/api/v1/cola';
   static String get miTurnoUrl => '$baseUrl/api/v1/cola/mi-turno';
-  static String avanzarColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/avanzar';
-  static String perdidaColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/perdida';
+  static String avanzarColaUrl(int idCita) =>
+      '$baseUrl/api/v1/cola/$idCita/avanzar';
+  static String perdidaColaUrl(int idCita) =>
+      '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
 
   // Request timeout duration
   static const Duration timeoutDuration = Duration(seconds: 15);
   static const Duration downloadTimeoutDuration = Duration(seconds: 60);
   static const Duration reportExportTimeoutDuration = Duration(seconds: 60);
-  static const Duration reportTranscriptionTimeoutDuration = Duration(seconds: 60);
+  static const Duration reportTranscriptionTimeoutDuration = Duration(
+    seconds: 60,
+  );
 
   // Inactivity timeout configuration (CU23)
   static const int inactivityTimeoutMinutes = 15;
