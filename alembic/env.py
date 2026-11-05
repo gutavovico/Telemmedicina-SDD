@@ -2,7 +2,7 @@ import os
 import sys
 from logging.config import fileConfig
 
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import engine_from_config, pool, inspect, text
 from alembic import context
 
 # Agregar la raiz del proyecto al sys.path para importar app
@@ -20,6 +20,7 @@ from app.modules.medical_records.prescriptions.models import (  # noqa: F401
     Medicamento, Receta, RecetaDetalle, ConfiguracionRecetas,
     SecuenciaRecetas, RecetaIdempotencia, RecetaValidacionIntento,
 )
+from app.modules.payments.models import Pago, Comprobante  # noqa: F401
 from app.modules.medical_records.tratamientos.models import (  # noqa: F401
     Tratamiento, TratamientoMedicamento, TratamientoDosis, TratamientoEvento,
 )
@@ -27,6 +28,9 @@ from app.modules.medical_records.tratamientos.avisos_models import (  # noqa: F4
     TratamientoAviso, TratamientoDispositivo, TratamientoEntregaPush, TratamientoCursor,
 )
 from app.modules.backup.models import BackupConfig  # noqa: F401
+from app.modules.tenants.models import (  # noqa: F401
+    PlanVersion, TenantRequest, TenantRequestTrackingAudit, TenantSubscription, SubscriptionPayment, SubscriptionChange,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -72,6 +76,19 @@ def run_migrations_online() -> None:
         )
 
         with context.begin_transaction():
+            # Do not rewrite shared revision 020. Refuse its historical name-based
+            # backfill BEFORE it executes, even for direct `alembic upgrade head`.
+            destination = context.get_revision_argument()
+            if destination and inspect(connection).has_table('plan_versions'):
+                from alembic.script import ScriptDirectory
+                script = ScriptDirectory.from_config(config)
+                targets = tuple(rev.revision for rev in script.get_revisions(destination))
+                target_history = {rev.revision for rev in script.iterate_revisions(targets, 'base')}
+                current = context.get_context().get_current_heads()
+                applied = {rev.revision for rev in script.iterate_revisions(current, 'base')} if current else set()
+                if ('cu34_consolidacion_020' in target_history and 'cu34_consolidacion_020' not in applied
+                        and connection.scalar(text('SELECT count(*) FROM plan_versions'))):
+                    raise RuntimeError('CU35: detener antes de 020 main; hay versiones legacy y su backfill por nombre no esta autorizado. Conciliar en copia con mapas explicitos.')
             context.run_migrations()
 
 

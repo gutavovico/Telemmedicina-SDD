@@ -1,4 +1,5 @@
-from sqlalchemy import Column, BigInteger, Integer, String, func, DateTime, Boolean, ForeignKey, JSON, CheckConstraint, Numeric, UniqueConstraint
+from sqlalchemy import Column, BigInteger, Integer, String, Text, func, DateTime, Boolean, ForeignKey, JSON, CheckConstraint, Numeric, UniqueConstraint
+
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import relationship, Mapped, mapped_column
 from app.core.database import Base
@@ -6,7 +7,10 @@ from app.core.database import Base
 
 class Clinica(Base):
     __tablename__ = "clinicas"
-    id_clinica = Column(BigInteger, primary_key=True, autoincrement=True)
+    id_clinica = Column(
+        BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True
+    )
+    tenant_id = Column(String(36), unique=True, nullable=True, index=True)
     nombre = Column(String(150), nullable=False)
     razon_social = Column(String(200), nullable=True)
     nit = Column(String(50), unique=True, nullable=True)
@@ -15,6 +19,18 @@ class Clinica(Base):
     direccion = Column(String(250), nullable=True)
     logo = Column(String(500), nullable=True)
     estado = Column(String(20), nullable=False, default="ACTIVO")
+    # Referencia canónica a la versión inmutable del catálogo CU34.
+    # ``plan_id`` se conserva durante la transición para leer acuerdos legacy.
+    id_version_plan = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        # La FK física se crea en la migración 020. Se omite en el modelo para
+        # permitir fixtures SQLite que construyan solo un subconjunto de tablas.
+        nullable=True,
+        index=True,
+    )
+    plan_id = Column(String(36), nullable=True)
+    commercial_notes = Column(Text, nullable=True)
+    row_version = Column(Integer, nullable=False, default=1, server_default="1")
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -34,7 +50,7 @@ class RolPermiso(Base):
 class Permiso(Base):
     __tablename__ = "permisos"
 
-    id_permiso = Column(BigInteger, primary_key=True, autoincrement=True, index=True)
+    id_permiso = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True, index=True)
     nombre = Column(String(100), nullable=False)
     descripcion = Column(String, nullable=True)
     modulo = Column(String(100), nullable=False)
@@ -50,7 +66,7 @@ class Permiso(Base):
 
 class Rol(Base):
     __tablename__ = "roles"
-    id_rol = Column(BigInteger, primary_key=True, autoincrement=True)
+    id_rol = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     id_clinica = Column(BigInteger, ForeignKey("clinicas.id_clinica"), nullable=True)
     nombre = Column(String(100), nullable=False)
     descripcion = Column(String, nullable=True)
@@ -60,13 +76,24 @@ class Rol(Base):
     rol_permisos = relationship("RolPermiso", back_populates="rol", cascade="all, delete-orphan")
     permisos = relationship("Permiso", secondary="rol_permisos", back_populates="roles", viewonly=True)
 
+    def __eq__(self, other):
+        if isinstance(other, str):
+            return self.nombre == other
+        return super().__eq__(other)
+
+    def __hash__(self):
+        return super().__hash__()
+
+    def __str__(self) -> str:
+        return self.nombre
+
     def __repr__(self) -> str:
         return f"<Rol(id={self.id_rol}, nombre='{self.nombre}', estado='{self.estado}')>"
 
 
 class Usuario(Base):
     __tablename__ = "usuarios"
-    id_usuario = Column(BigInteger, primary_key=True, autoincrement=True, index=True)
+    id_usuario = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True, index=True)
     # La migración 001 ya permite NULL; d2e3f4a5b6c7 incorpora el rol global.
     id_clinica = Column(BigInteger, ForeignKey("clinicas.id_clinica"), nullable=True)
     id_rol = Column(BigInteger, ForeignKey("roles.id_rol"), nullable=True)
@@ -80,9 +107,6 @@ class Usuario(Base):
     notificaciones_push = Column(Boolean, default=True, nullable=False)
     notificaciones_email = Column(Boolean, default=True, nullable=False)
     notificaciones_sms = Column(Boolean, default=False, nullable=False)
-    # Version del token: se incrementa para invalidar JWTs emitidos (logout global,
-    # restablecimiento de contrasena en CU23). Existe en el esquema desplegado con
-    # default 0 y NOT NULL; sin mapearla, cualquier alta fallaria.
     token_version = Column(BigInteger, nullable=False, server_default="0", default=0)
     fecha_creacion = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     fecha_actualizacion = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
@@ -91,11 +115,6 @@ class Usuario(Base):
 
     @property
     def rol(self):
-        """Nombre del rol (ADMIN, MEDICO, RECEPCION, PACIENTE).
-
-        Lo consumen los guards por rol del frontend Angular y Flutter, que de otro
-        modo recibirian `rol` siempre nulo y negarian el acceso.
-        """
         return self.rol_rel.nombre if self.rol_rel else None
 
     @property
@@ -107,20 +126,9 @@ class Usuario(Base):
 
 
 class SesionActiva(Base):
-    """Sesion autenticada individual, para medir inactividad por sesion (CU23).
-
-    Existe una fila por par de tokens emitido en un login. `jti` es el claim que
-    viaja dentro del JWT y coincide con la clave de revocacion. Sin esta tabla
-    solo se podria medir la inactividad por usuario, lo que cerraria tambien los
-    demas dispositivos que el usuario aun no ha cerrado (decision D1 del change).
-
-    `ultima_actividad` se refresca en cada peticion autenticada dentro de la
-    ventana configurada; `revocada_en` queda NULL mientras la sesion es valida.
-    """
-
     __tablename__ = "sesiones_activas"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     jti = Column(String(64), nullable=False, unique=True, index=True)
     id_usuario = Column(BigInteger, ForeignKey("usuarios.id_usuario"), nullable=False)
     id_clinica = Column(BigInteger, nullable=True)
@@ -133,22 +141,9 @@ class SesionActiva(Base):
 
 
 class TokenBlacklist(Base):
-    """Revocacion de una sesion concreta por `jti` (CU23).
-
-    Tabla preexistente en el esquema desplegado de Neon, sin revision propia en
-    el repositorio, y hasta ahora sin usar por ningun modulo. Se reutiliza tal
-    cual (decision D2): la columna `token` almacena el `jti`, que es un UUID
-    hexadecimal y encaja en el VARCHAR existente.
-
-    El atributo Python se llama `revocada_en` para no filtrar el ingles al resto
-    del dominio, pero se mapea a la columna REAL `revoked_at` que ya existe en
-    Neon. Sin este mapeo explicito, SQLAlchemy buscaria una columna
-    `revocada_en` inexistente y toda revocacion fallaria en live.
-    """
-
     __tablename__ = "token_blacklist"
 
-    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True)
     token = Column(String(500), nullable=False, index=True)
     revocada_en = Column(
         "revoked_at",
@@ -163,8 +158,13 @@ class TokenBlacklist(Base):
 
 class Auditoria(Base):
     __tablename__ = "auditoria"
+    # La auditoría global puede ejecutarse sin id_clinica (CU30 y CU34).
+    # La migración 020 elimina la restricción restrictiva de CU34.
+
     __table_args__ = (CheckConstraint(
-        "id_clinica IS NOT NULL OR COALESCE(tabla_afectada IN ('planes', 'versiones_plan'), FALSE)",
+        "id_clinica IS NOT NULL OR COALESCE(tabla_afectada IN ('planes', 'versiones_plan') OR "
+        "(tabla_afectada = 'tenant_requests' AND accion = 'RECHAZAR_TENANT_REQUEST') OR "
+        "(tabla_afectada = 'tenant_management' AND accion = 'ACCESO_DENEGADO'), FALSE)",
         name="ck_auditoria_global_catalogo",
     ),)
 

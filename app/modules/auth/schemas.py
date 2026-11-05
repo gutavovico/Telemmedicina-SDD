@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Literal, Optional
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 
 
 class UsuarioBase(BaseModel):
@@ -39,6 +39,13 @@ class UsuarioResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    @field_validator("rol", mode="before")
+    @classmethod
+    def _normalize_rol(cls, v):
+        if hasattr(v, "nombre"):
+            return v.nombre
+        return str(v) if v is not None else None
+
 
 class LoginRequest(BaseModel):
     correo: EmailStr = Field(..., examples=["juan.perez@ejemplo.com"])
@@ -49,6 +56,12 @@ class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    must_change_password: bool = False
+
+
+class ChangeTemporaryPasswordRequest(BaseModel):
+    nueva_password: str = Field(..., min_length=8, max_length=100)
+    confirmar_password: str = Field(..., min_length=8, max_length=100)
 
 
 class RefreshTokenRequest(BaseModel):
