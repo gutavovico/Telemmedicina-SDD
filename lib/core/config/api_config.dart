@@ -53,6 +53,12 @@ class ApiConfig {
   static String prescriptionDetailUrl(int id) => '$baseUrl/api/v1/recetas/$id';
   static String prescriptionPdfUrl(int id) => '$baseUrl/api/v1/recetas/$id/pdf';
 
+  // Asistencia Inteligente de Tratamiento (CU18)
+  static String get assistanceEvaluateUrl => '$baseUrl/api/v1/asistencia-tratamiento/evaluar';
+  static String get assistanceHistoryUrl => '$baseUrl/api/v1/asistencia-tratamiento/historial';
+  static String assistanceDetailUrl(int id) => '$baseUrl/api/v1/asistencia-tratamiento/evaluaciones/$id';
+  static String get assistanceCatalogUrl => '$baseUrl/api/v1/asistencia-tratamiento/interacciones/catalogo';
+
   // Teleconsulta y Chat de Cita Médica (CU15)
   static String teleconsultaUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/teleconsulta';
   static String get myTeleconsultaUrl => '$baseUrl/api/v1/citas/me/teleconsulta';

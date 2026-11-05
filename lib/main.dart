@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
+import 'features/ai_assistant/presentation/providers/asistencia_provider.dart';
 import 'features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import 'features/analytics/reportes/presentation/screens/reports_screen.dart';
 import 'features/appointments/presentation/controllers/doctor_controller.dart';
@@ -67,6 +68,7 @@ class TelemedicinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ColaProvider()),
         ChangeNotifierProvider(create: (_) => FichaProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalDocumentsProvider()),
+        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
         // CU16: el provider emite `sessionExpired` una sola vez por ciclo ante 401.
         // El coordinador reutiliza AuthController.logout (limpieza segura) y
         // redirige a /login sin navegar desde Domain/Data.
@@ -120,7 +122,7 @@ class TelemedicinaApp extends StatelessWidget {
           '/teleconsulta/sala-espera': (context) => const SalaEsperaScreen(),
           '/teleconsulta/videollamada': (context) => const VideollamadaMovilScreen(),
           '/analytics': (context) => const ReportsScreen(),
-          '/ai-assistant': (context) => const AiAssistantScreen(),
+          '/ai-assistant': (context) => const PatientOnlyRoute(child: AiAssistantScreen()),
         },
       ),
     );
