@@ -1,4 +1,3 @@
-Set-Content -Path .gitignore -Value @"
 # Ignorar repositorios hijos para mantenerlos independientes
 /backend_Telemedicina/
 /frontend_Telemedicina/
@@ -7,7 +6,7 @@ Set-Content -Path .gitignore -Value @"
 
 # Dependencias y logs
 node_modules/
+.venv/
 npm-debug.log*
 .DS_Store
 Thumbs.db
-"@

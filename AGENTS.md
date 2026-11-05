@@ -68,3 +68,15 @@ openspec doctor
 openspec validate --specs
 ```
 Ambos comandos deben reportar éxito sin errores ni advertencias.
+
+## 5. Compatibilidad acotada autorizada — CU34
+
+Decisión del usuario de 2026-11-03, aplicable exclusivamente al catálogo CU34:
+- Módulo funcional: `app/modules/auth/planes/`; esquemas, servicios, permisos y router permanecen allí. Los modelos compartidos Plan/VersionPlan se definen una sola vez en `app/modules/auth/models.py`, como Clinica. En web la pantalla queda en `src/app/features/auth/planes/`, los tipos en `core/models/plan.models.ts` y el cliente HTTP en `core/services/planes.service.ts`, siguiendo clínicas. Ruta `/admin/planes`.
+- Usa `Session` síncrona y `get_db` existentes con `select/execute/scalars`; sin nuevas llamadas a `session.query()`.
+- Plan y VersionPlan son globales, con identificadores BIGINT compatibles. No tienen tenant ni requieren seleccionar clínica. Todos sus endpoints exigen superadministrador global autenticado.
+- El mapeo `Usuario.id_clinica` admite NULL como la migración 001 existente, para conservar la identidad del superadministrador global. Esto no elimina los filtros de clínica de los módulos transaccionales ni cambia las sesiones.
+- La auditoría global reutiliza `core.audit.registrar_auditoria` en la misma transacción. `auditoria.id_clinica` puede ser NULL exclusivamente para eventos de `planes` y `versiones_plan`; una restricción mantiene obligatoria la clínica para los demás eventos.
+- Solo BOB con dos decimales y ciclo MENSUAL. Esta decisión posterior prevalece sobre las alternativas anual/mensual del documento funcional.
+- CU34 no crea suscripciones, no cobra ni renueva. Los consumidores futuros referenciarán una versión concreta.
+- Las reglas de aislamiento, permisos y sesiones de los demás módulos permanecen vigentes.
