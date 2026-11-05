@@ -10,7 +10,8 @@
 - [x] Recuperar revisión CU18 de main y converger ambas cabezas en cu35_cu18_convergencia_023 sin reescribir historia.
 - [x] Probar actualización poblada desde CU18 con fixture anónimo, rechazo sin ancla y conservación de snapshots/fechas.
 - [ ] Confirmar nombre/tipo de rama Neon y validar actualización en copia identificada antes del despliegue.
-- [ ] Acreditar ancla original de la suscripción existente; no inferirla de fechas actuales.
+- [x] Resolver anclas de las dos suscripciones existentes por adopción explícita del responsable: 5/5, solo tras comprobar aniversario exacto; mapa privado fuera de Git, sin modificar fechas ni importes.
+- [x] Comparar tablas/columnas/tipos/PK/FK/CHECK/índices del contrato con migraciones reales; diez pruebas PostgreSQL CU35 aprobadas, con ambos historiales anónimos y rechazo de mapa incompleto.
 - [ ] Obtener mapas verificados si el destino definitivo tiene datos legacy; no inferir por nombre.
 - [ ] Coordinar checkout/webhook Stripe sandbox con el compañero; las confirmaciones de tests son simuladas.
 - [ ] Ejecutar CLI OpenSpec disponible; sigue ausente en este entorno.

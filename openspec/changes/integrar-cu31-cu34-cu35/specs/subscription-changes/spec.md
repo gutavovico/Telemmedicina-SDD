@@ -46,13 +46,18 @@ The system SHALL deny clinical use for the canceled entity from its effective da
 - **THEN** only that entity loses clinical access and another active entity retains access
 
 ### Requirement: Verified historical migration
-The system SHALL preserve applied CU18 and catalog revisions, converge both histories in a new revision and require an explicit verified original billing anchor for each existing subscription, without matching versions by name.
+The system SHALL preserve applied CU18 and catalog revisions, converge both histories in a new revision and require an explicit billing anchor map for each existing subscription, without matching versions by name. An anchor SHALL be supported by original evidence or by an explicit owner-approved adoption decision for the selected records, never inferred automatically by migration code.
 
 #### Scenario: Original anchor unavailable
-- **WHEN** an existing subscription has no operator-verified original anchor mapping
+- **WHEN** an existing subscription has neither original anchor evidence nor an explicit owner-approved adoption mapping
 - **THEN** migration fails without altering its version, dates or historical payments
 
 #### Scenario: Populated canonical subscription
 - **GIVEN** an explicit original anchor fixture and a subscription and payment referencing a canonical CU34 version
 - **WHEN** the CU18 database is upgraded to the converged head
 - **THEN** the exact version references, charged amount and agreed cycle dates remain unchanged
+
+#### Scenario: Explicit adoption for the two current subscriptions
+- **GIVEN** the owner decision of 2026-11-05 permits adopting the UTC start day only if the stored closing is the exact next-month anniversary, capped at the last day of a shorter month
+- **WHEN** both selected subscriptions satisfy that condition
+- **THEN** an explicit map adopts day 5 for both, preserves their paid periods and history, and does not authorize automatic adoption for other records

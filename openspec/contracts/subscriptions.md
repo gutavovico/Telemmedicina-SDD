@@ -105,10 +105,14 @@ snapshots CU34. Ambos significan exclusivamente mensual; ANNUAL se rechaza.
 
 El destino Neon inspeccionado solo en lectura está en merge_cu18_asistencia_022,
 recuperada de origin/main en d952a29cfe33a1f30aed41535ab40ec886b26efc.
-La suscripción y pago observados ya referencian la misma versión canónica; no
-necesitan correspondencia por nombre. Su ancla original no está acreditada por
-el esquema/historial disponible: no deducirla de fecha_inicio. La actualización
-se detiene sin billing_anchor_map verificado; una renovación de suscripción
-existente sin ancla responde 409. La prueba poblada local usa un ancla ficticia
-explícita y no constituye aprobación de un mapa para la base compartida.
+Las dos suscripciones y pagos observados ya referencian versiones canónicas 1/2;
+no necesitan correspondencia por nombre. El esquema/historial no acredita sus
+anclas históricas. Decisión explícita del responsable del 2026-11-05: adoptar
+para esas dos filas el día UTC de fecha_inicio SI fecha_fin es su aniversario
+mensual exacto con ajuste al último día del mes corto. Ambas cumplen; se preparó
+billing_anchor_map privado con día 5 para ambas, conservando fechas e importes.
+Es adopción autorizada, no recuperación de evidencia histórica ni inferencia
+automática para otras filas. La actualización sigue exigiendo mapa explícito;
+una renovación existente sin ancla responde 409. La regresión poblada local usa
+IDs ficticios y valida ambos historiales. Aplicación en copia Neon aún pendiente.
 Las pruebas locales no autorizan stamp ni reescritura de revisiones compartidas.

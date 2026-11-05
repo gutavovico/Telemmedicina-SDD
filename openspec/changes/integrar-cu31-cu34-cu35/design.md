@@ -113,7 +113,10 @@ revisión para restricciones de despliegue. CU18 fue recuperada en main (d952a29
 No hay solapamiento de tablas CU18 con subscription_changes; las columnas,
 tipos, nulabilidad y longitudes CU18 coinciden entre Neon leído y PostgreSQL local.
 No se certificó igualdad completa de datos, defaults, triggers o índices remotos.
-La suscripción/pago canónicos conservan sus IDs de versión. Su ancla original no
-está acreditada: billing_anchor_map sigue siendo un requisito de despliegue,
-no una inferencia a partir del día de la fecha actual. Renovación sin ancla
-verificada se rechaza; no se inventa el dato al iniciar checkout.
+Las suscripciones/pagos canónicos conservan sus IDs de versión. Las anclas
+históricas no están acreditadas. El responsable autorizó el 2026-11-05 adoptar
+el día UTC de inicio para las dos filas actuales SI su cierre es el aniversario
+mensual exacto (último día si mes corto). Ambas cumplen: mapa privado explícito
+5/5, sin cambiar periodos ni cobros. No es recuperación de evidencia ni una regla
+automática para otras filas. Renovación sin ancla se rechaza; no se inventa al
+iniciar checkout. La copia Neon y Stripe sandbox siguen pendientes.
