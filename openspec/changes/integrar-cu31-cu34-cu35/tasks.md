@@ -1,0 +1,17 @@
+- [x] Preservar worktrees originales, SI2-Grupo3.md y Terrazas; crear worktrees review desde origin/main.
+- [x] Reutilizar CU34 y consolidación de main; adoptar id_version_plan sin columnas duplicadas.
+- [x] Añadir cu35_integracion_022 después de la 021 compartida sin reescribir revisiones.
+- [x] Bloquear backfill por nombre antes de 020 y exigir mapas explícitos por suscripción/pago si ya se aplicó.
+- [x] Validar cadena completa desde vacío y desde 62b0d532ee0a en PostgreSQL aislado.
+- [x] Validar concurrencia, snapshots, renovación, worker real repetido y cancelación (solo prueba interna).
+- [x] Integrar frontend con contrato CU31; build aprobado y 292 pruebas frontend aprobadas, 5 skips existentes.
+- [x] Excluir demo manual, rutas de control, cuentas, capturas y configuración local del PR.
+- [x] Inspeccionar Neon en read-only; documentar merge_cu18_asistencia_022; recuperar su definición desde main/d952a29c.
+- [x] Recuperar revisión CU18 de main y converger ambas cabezas en cu35_cu18_convergencia_023 sin reescribir historia.
+- [x] Probar actualización poblada desde CU18 con fixture anónimo, rechazo sin ancla y conservación de snapshots/fechas.
+- [ ] Confirmar nombre/tipo de rama Neon y validar actualización en copia identificada antes del despliegue.
+- [ ] Acreditar ancla original de la suscripción existente; no inferirla de fechas actuales.
+- [ ] Obtener mapas verificados si el destino definitivo tiene datos legacy; no inferir por nombre.
+- [ ] Coordinar checkout/webhook Stripe sandbox con el compañero; las confirmaciones de tests son simuladas.
+- [ ] Ejecutar CLI OpenSpec disponible; sigue ausente en este entorno.
+- [ ] Aprobar despliegue coordinado (migración/API, frontend, activación del worker); sin acciones productivas en esta entrega.

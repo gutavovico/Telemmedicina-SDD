@@ -35,5 +35,13 @@ PlanDetalle: {id,codigo,activo,version_actual,creado_en,actualizado_en,version:V
 
 La nueva versión requiere bloqueo FOR UPDATE sobre Plan y actualización condicionada por version_actual/activo. Único (plan_id,numero) como respaldo. Desactivación comparte bloqueo y compare-and-swap. Auditoría global, id_clinica NULL, misma transacción, sin commit interno. Los demás eventos mantienen clínica obligatoria por CHECK. No se expone eliminación ni reactivación.
 
-## Integraciones pendientes
-CU31 recibirá plan_id/version_id/ciclo/precio/moneda; CU35 consultará condiciones de origen/destino y estado para nuevas contrataciones; CU36 consumirá límites/tarifas de versión contratada. No se crean suscripciones ni gateways. La verificación de renovación real queda pendiente de esos casos.
+## Integraciones CU31/CU35 y consumo futuro CU36
+CU31/CU35 comparten `VersionPlan.id` mediante `id_version_plan`; véase
+`subscriptions.md`. CU34 no modifica automáticamente esas referencias al editar
+o desactivar un plan. CU36 consumirá límites/tarifas de la versión contratada,
+sin que esta integración implemente su medición o cobro de excedentes.
+
+En una renovación CU31 se acepta la versión publicada vigente del mismo plan;
+se aplica al nuevo ciclo confirmado y conserva hasta entonces la contratada.
+Un cambio pendiente CU35 conserva su destino exacto; cancelación pendiente
+bloquea renovación. Ninguna edición CU34 modifica pagos históricos.
