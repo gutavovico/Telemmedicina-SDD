@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import '../../../../core/config/api_config.dart';
 import '../../../../core/network/api_client.dart';
 import '../../../../core/network/api_client_interface.dart';
+import '../../../../core/network/api_exceptions.dart';
 import '../models/clinical_document_model.dart';
 
 class ClinicalDocumentService {
@@ -87,6 +88,21 @@ class ClinicalDocumentService {
     if (download.urlFirmada.isEmpty) {
       throw StateError('El servidor no devolvió una URL de descarga válida.');
     }
-    return _apiClient.downloadBytes(download.urlFirmada);
+    final uri = Uri.tryParse(download.urlFirmada);
+    if (uri == null || !uri.hasAuthority ||
+        (uri.scheme != 'https' && uri.scheme != 'http')) {
+      throw StateError('El servidor devolvió una URL de descarga inválida.');
+    }
+    // La URL local puede apuntar a localhost en el servidor. Usar el host
+    // configurado de la API y la ruta que valida el documento por ID.
+    if (uri.path.startsWith('/api/v1/documentos/file/')) {
+      return _apiClient.downloadBytes(ApiConfig.documentFileUrl(idDocumento));
+    }
+    // R2/S3 autentica mediante la firma de la URL: no enviar JWT ni tenant.
+    try {
+      return await _apiClient.downloadBytes(uri.toString(), includeAuth: false);
+    } on ApiException {
+      return _apiClient.downloadBytes(ApiConfig.documentFileUrl(idDocumento));
+    }
   }
 }

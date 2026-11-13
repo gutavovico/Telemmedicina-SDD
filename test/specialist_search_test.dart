@@ -18,6 +18,7 @@ class RecordingApiClient implements ApiClientInterface {
     String url, {
     bool includeAuth = true,
     String? authToken,
+    Map<String, String>? headers,
   }) async {
     requestedUrls.add(url);
     return {'total': 0, 'page': 1, 'per_page': 20, 'items': <dynamic>[]};
@@ -28,6 +29,22 @@ class RecordingApiClient implements ApiClientInterface {
     String url, {
     dynamic body,
     bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async => null;
+
+  @override
+  Future<dynamic> patch(
+    String url, {
+    dynamic body,
+    bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async => null;
+
+  @override
+  Future<dynamic> delete(
+    String url, {
+    bool includeAuth = true,
+    Map<String, String>? headers,
   }) async => null;
 
   @override

@@ -51,6 +51,7 @@ class ApiConfig {
   static String documentDetailUrl(int id) => '$baseUrl/api/v1/documentos/$id';
   static String documentDownloadUrl(int id) =>
       '$baseUrl/api/v1/documentos/$id/download';
+  static String documentFileUrl(int id) => '$baseUrl/api/v1/documentos/$id/file';
 
   // Recetas Médicas Digitales (Medical Records - CU16, solo lectura paciente)
   static String get prescriptionsUrl => '$baseUrl/api/v1/recetas';
@@ -106,6 +107,45 @@ class ApiConfig {
   static String perdidaColaUrl(int idCita) =>
       '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
+
+  // Tratamientos Médicos (CU17)
+  static String get treatmentsUrl => '$baseUrl/api/v1/tratamientos';
+  static String treatmentDetailUrl(int id) => '$baseUrl/api/v1/tratamientos/$id';
+  static String cronogramaUrl(int id, String fecha) =>
+      '$baseUrl/api/v1/tratamientos/$id/cronograma?fecha=$fecha';
+  static String adherenciaUrl(int id) =>
+      '$baseUrl/api/v1/tratamientos/$id/adherencia';
+  static String dosisIntentosUrl(int idDosis) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/intentos';
+  static String dosisRegistrosUrl(int idDosis) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros';
+  static String dosisIdempotenciaUrl(int idDosis, String key) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros/idempotencia/$key';
+  static String dosisResolverUrl(int idDosis, String key) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros/idempotencia/$key/resolver';
+  static String avisosUrl({int skip = 0, int limit = 20, bool noLeidos = false}) =>
+      '$baseUrl/api/v1/tratamientos/avisos?skip=$skip&limit=$limit${noLeidos ? '&no_leidos=true' : ''}';
+  static String leerAvisoUrl(int idAviso) =>
+      '$baseUrl/api/v1/tratamientos/avisos/$idAviso/leer';
+  static String get dispositivosUrl =>
+      '$baseUrl/api/v1/tratamientos/dispositivos';
+  static String dispositivoDetailUrl(int idDispositivo) =>
+      '$baseUrl/api/v1/tratamientos/dispositivos/$idDispositivo';
+
+  // Aliases for compatibility
+  static String treatmentScheduleUrl(int id, String fecha) => cronogramaUrl(id, fecha);
+  static String treatmentAdherenceUrl(int id) => adherenciaUrl(id);
+  static String doseAttemptsUrl(int idDosis) => dosisIntentosUrl(idDosis);
+  static String doseRecordsUrl(int idDosis) => dosisRegistrosUrl(idDosis);
+  static String doseIdempotencyUrl(int idDosis, String idempotencyKey) =>
+      dosisIdempotenciaUrl(idDosis, idempotencyKey);
+  static String doseResolveUrl(int idDosis, String idempotencyKey) =>
+      dosisResolverUrl(idDosis, idempotencyKey);
+  static String get treatmentAlertsUrl => '$baseUrl/api/v1/tratamientos/avisos';
+  static String treatmentAlertReadUrl(int idAviso) => leerAvisoUrl(idAviso);
+  static String get treatmentDevicesUrl => dispositivosUrl;
+  static String treatmentDeviceDetailUrl(int idDispositivo) =>
+      dispositivoDetailUrl(idDispositivo);
 
   // Request timeout duration
   static const Duration timeoutDuration = Duration(seconds: 15);

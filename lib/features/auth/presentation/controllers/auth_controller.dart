@@ -21,7 +21,8 @@ class AuthController extends ChangeNotifier {
     InactivityService? inactivityService,
   }) : _remoteDataSource = remoteDataSource ?? AuthRemoteDataSource(),
        _storageService = storageService ?? SecureStorageService(),
-       _inactivityService = inactivityService ??
+       _inactivityService =
+           inactivityService ??
            InactivityService(
              remoteDataSource: remoteDataSource,
              storageService: storageService,
@@ -33,6 +34,7 @@ class AuthController extends ChangeNotifier {
   bool _profileVerified = false;
   bool _reportsAuthorized = false;
   bool _isLoggingOut = false;
+  Future<void> Function()? onBeforeLogout;
   int _sessionEpoch = 0;
   int _reportsCheckEpoch = 0;
   String? _errorMessage;
@@ -58,17 +60,28 @@ class AuthController extends ChangeNotifier {
   }
 
   bool get canAccessReports {
-    return _profileVerified && _reportsAuthorized && eligibleForReports(_currentUser);
+    return _profileVerified &&
+        _reportsAuthorized &&
+        eligibleForReports(_currentUser);
   }
+
   static bool eligibleForReports(UserEntity? user) {
-    if (user == null || user.idClinica == null ||
-        user.estado?.toLowerCase() != 'activo') return false;
-    final role = (user.rolNombre ?? '').trim().toUpperCase()
-        .replaceAll('Ó', 'O').replaceAll('Á', 'A');
+    if (user == null ||
+        user.idClinica == null ||
+        user.estado?.toLowerCase() != 'activo') {
+      return false;
+    }
+    final role = (user.rolNombre ?? '')
+        .trim()
+        .toUpperCase()
+        .replaceAll('Ó', 'O')
+        .replaceAll('Á', 'A');
     return const {'ADMIN', 'ADMINISTRADOR', 'ADMINISTRACION'}.contains(role);
   }
+
   String? get reportsAccountKey => canAccessReports
-      ? '${_currentUser!.idUsuario}:${_currentUser!.idClinica}' : null;
+      ? '${_currentUser!.idUsuario}:${_currentUser!.idClinica}'
+      : null;
 
   Future<void> verifyReportsAccess() async {
     final epoch = _sessionEpoch;
@@ -146,7 +159,9 @@ class AuthController extends ChangeNotifier {
 
     try {
       final hasSessionToken = ApiClient().hasSessionAccessToken;
-      final token = hasSessionToken ? null : await _storageService.getAccessToken();
+      final token = hasSessionToken
+          ? null
+          : await _storageService.getAccessToken();
       if (epoch != _sessionEpoch) return false;
       if (!hasSessionToken && (token == null || token.isEmpty)) {
         await _storageService.clearSession();
@@ -162,7 +177,9 @@ class AuthController extends ChangeNotifier {
       }
 
       // Try reading locally cached user first for faster load
-      final cachedUser = hasSessionToken ? null : await _storageService.getUser();
+      final cachedUser = hasSessionToken
+          ? null
+          : await _storageService.getUser();
       if (epoch != _sessionEpoch) return false;
       if (cachedUser != null) {
         _currentUser = UserModel.fromJson(cachedUser);
@@ -214,7 +231,11 @@ class AuthController extends ChangeNotifier {
   }
 
   // Login
-  Future<bool> login(String correo, String password, {bool rememberMe = true}) async {
+  Future<bool> login(
+    String correo,
+    String password, {
+    bool rememberMe = true,
+  }) async {
     if (_isLoggingOut) return false;
     final epoch = ++_sessionEpoch;
     ++_reportsCheckEpoch;
@@ -250,7 +271,8 @@ class AuthController extends ChangeNotifier {
       await _storageService.setRememberMe(rememberMe);
       if (epoch != _sessionEpoch) return false;
 
-      if (tokenResponse.tenantId != null && tokenResponse.tenantId!.isNotEmpty) {
+      if (tokenResponse.tenantId != null &&
+          tokenResponse.tenantId!.isNotEmpty) {
         await _storageService.saveTenantId(tokenResponse.tenantId!);
         if (epoch != _sessionEpoch) return false;
       }
@@ -419,6 +441,11 @@ class AuthController extends ChangeNotifier {
   Future<void> logout() async {
     if (_isLoggingOut) return;
     _isLoggingOut = true;
+    try {
+      await onBeforeLogout?.call();
+    } catch (_) {
+      // El cierre de sesión continúa aunque el proveedor push no responda.
+    }
     _inactivityService.stop();
     ++_sessionEpoch;
     ++_reportsCheckEpoch;

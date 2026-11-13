@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
 import 'features/ai_assistant/presentation/providers/asistencia_provider.dart';
@@ -32,6 +34,14 @@ import 'features/medical_records/presentation/screens/mis_recetas_screen.dart';
 import 'features/medical_records/presentation/screens/patient_profile_screen.dart';
 import 'features/medical_records/triage/presentation/pages/triage_page.dart';
 import 'features/medical_records/presentation/session/prescription_session_coordinator.dart';
+import 'features/treatments/data/services/dose_operation_recovery_service.dart';
+import 'features/treatments/presentation/providers/treatment_provider.dart';
+import 'features/treatments/presentation/screens/avisos_inbox_screen.dart';
+import 'features/treatments/presentation/screens/cronograma_screen.dart';
+import 'features/treatments/presentation/screens/treatment_detail_screen.dart';
+import 'features/treatments/presentation/screens/treatments_list_screen.dart';
+import 'features/treatments/presentation/session/treatment_session_coordinator.dart';
+import 'features/treatments/presentation/session/android_push_session_coordinator.dart';
 
 import 'features/appointments/presentation/screens/mis_citas_screen.dart';
 import 'features/cola_virtual/presentation/providers/cola_provider.dart';
@@ -47,6 +57,15 @@ import 'features/teleconsulta/presentation/screens/videollamada_movil_screen.dar
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  var firebasePushReady = false;
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    try {
+      await Firebase.initializeApp();
+      firebasePushReady = true;
+    } catch (_) {
+      // La atención clínica y la bandeja siguen disponibles sin push.
+    }
+  }
 
   // CU19: push solo en la APK Android; en web no hace nada.
   await PushService.instance.initialize();
@@ -60,11 +79,13 @@ void main() async {
     ),
   );
 
-  runApp(const TelemedicinaApp());
+  runApp(TelemedicinaApp(firebasePushReady: firebasePushReady));
 }
 
 class TelemedicinaApp extends StatelessWidget {
-  const TelemedicinaApp({super.key});
+  final bool firebasePushReady;
+
+  const TelemedicinaApp({super.key, this.firebasePushReady = false});
 
   @override
   Widget build(BuildContext context) {
@@ -103,6 +124,90 @@ class TelemedicinaApp extends StatelessWidget {
             return provider;
           },
         ),
+        // CU17: Gestión y Monitoreo de Tratamientos Médicos.
+        // Sincroniza la sesión con AuthController y maneja 401 de forma desacoplada.
+        ChangeNotifierProxyProvider<AuthController, TreatmentProvider>(
+          create: (_) => TreatmentProvider(
+            recoveryService: DoseOperationRecoveryService(),
+          ),
+          update: (_, auth, treatment) {
+            final provider =
+                treatment ??
+                TreatmentProvider(
+                  recoveryService: DoseOperationRecoveryService(),
+                );
+            provider.onSessionExpired = () => handlePrescriptionSessionExpired(
+              authController: auth,
+              navigatorKey: prescriptionNavigatorKey,
+            );
+            provider.syncAuthSession(
+              isAuthenticated: auth.isAuthenticated,
+              userId: auth.currentUser?.idUsuario,
+              clinicId: auth.currentUser?.idClinica,
+            );
+            return provider;
+          },
+        ),
+        // Coordinador de ciclo de vida de sesión y reconciliación de tomas CU17
+        ChangeNotifierProxyProvider2<
+          AuthController,
+          TreatmentProvider,
+          TreatmentSessionCoordinator
+        >(
+          lazy: false,
+          create: (context) {
+            final treatment = Provider.of<TreatmentProvider>(
+              context,
+              listen: false,
+            );
+            final auth = Provider.of<AuthController>(context, listen: false);
+            final recovery = treatment.recoveryService;
+            return TreatmentSessionCoordinator(
+              recoveryService: recovery,
+              treatmentProvider: treatment,
+              authController: auth,
+            );
+          },
+          update: (_, auth, treatment, coordinator) {
+            final recovery = treatment.recoveryService;
+            final coord =
+                coordinator ??
+                TreatmentSessionCoordinator(
+                  recoveryService: recovery,
+                  treatmentProvider: treatment,
+                  authController: auth,
+                );
+            coord.attachTreatmentProvider(treatment);
+            coord.onSessionStateChanged(
+              userId: auth.currentUser?.idUsuario,
+              clinicId: auth.currentUser?.idClinica,
+            );
+            return coord;
+          },
+        ),
+        ProxyProvider<AuthController, AndroidPushSessionCoordinator>(
+          lazy: false,
+          update: (_, auth, coordinator) {
+            final push =
+                coordinator ??
+                AndroidPushSessionCoordinator(
+                  tokenSource: firebasePushReady
+                      ? FirebaseAndroidPushTokenSource()
+                      : null,
+                );
+            auth.onBeforeLogout = push.beforeLogout;
+            push.syncSession(
+              isPatient:
+                  auth.isPatient &&
+                  (auth.currentUser?.notificacionesPush ?? false),
+              isProfileVerified: auth.isProfileVerified,
+              userId: auth.currentUser?.idUsuario,
+              clinicId: auth.currentUser?.idClinica,
+            );
+            return push;
+          },
+          dispose: (_, coordinator) => coordinator.dispose(),
+        ),
       ],
       child: MaterialApp(
         title: 'Hospital San Juan de Dios - Telemedicina',
@@ -137,6 +242,15 @@ class TelemedicinaApp extends StatelessWidget {
               const PatientOnlyRoute(child: DocumentsListScreen()),
           '/recetas': (context) =>
               const PatientOnlyRoute(child: MisRecetasScreen()),
+          // Rutas CU17 protegidas por PatientOnlyRoute
+          '/tratamientos': (context) =>
+              const PatientOnlyRoute(child: TreatmentsListScreen()),
+          '/tratamientos/detalle': (context) =>
+              const PatientOnlyRoute(child: TreatmentDetailScreen()),
+          '/tratamientos/cronograma': (context) =>
+              const PatientOnlyRoute(child: CronogramaScreen()),
+          '/tratamientos/avisos': (context) =>
+              const PatientOnlyRoute(child: AvisosInboxScreen()),
           // CU19: pago de citas/teleconsultas y comprobantes.
           '/pagos': (context) =>
               const PatientOnlyRoute(child: PaymentHistoryScreen()),

@@ -296,6 +296,14 @@ class HomeScreen extends StatelessWidget {
                     color: const Color(0xFF0284C7),
                     onTap: () => Navigator.of(context).pushNamed('/ai-assistant'),
                   ),
+                  _buildServiceCard(
+                    icon: Icons.healing_rounded,
+                    title: 'Mis Tratamientos',
+                    subtitle: 'Planes médicos y tomas CU17',
+                    color: const Color(0xFF0284C7),
+                    onTap: () =>
+                        Navigator.of(context).pushNamed('/tratamientos'),
+                  ),
                   // CU19: pago de citas/teleconsultas y comprobantes digitales.
                   _buildServiceCard(
                     icon: Icons.receipt_long_outlined,
