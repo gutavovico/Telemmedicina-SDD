@@ -160,6 +160,15 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Suscripción y Pagos',
       },
       {
+        path: 'consumo',
+        canActivate: [adminOnlyGuard],
+        loadComponent: () =>
+          import('./features/tenants/subscription-payment/usage-billing/usage-billing.component').then(
+            (m) => m.UsageBillingComponent
+          ),
+        title: 'Plan y consumo de la entidad',
+      },
+      {
         path: 'solicitar-baja',
         canActivate: [adminOnlyGuard],
         loadComponent: () =>
