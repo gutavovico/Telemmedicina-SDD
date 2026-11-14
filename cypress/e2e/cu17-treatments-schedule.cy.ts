@@ -155,6 +155,7 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
       statusCode: 200,
       body: {
         id_usuario: 10,
+        id_clinica: 1,
         nombres: 'Carlos',
         apellidos: 'Mamani',
         correo: 'paciente@test.com',
@@ -570,8 +571,6 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
 
   describe('6. Recuperación segura y purga clínica tras cierre de sesión (CU17 / CU23)', () => {
     beforeEach(() => {
-      setupPatientSession();
-
       cy.intercept('GET', '**/api/v1/tratamientos/15', {
         statusCode: 200,
         body: mockPlan,
@@ -584,18 +583,14 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
     });
 
     it('detecta marcador mínimo opaco y reconcilia consultando api simulada de idempotencia', () => {
-      // Simular que el usuario reingresa y tiene en localStorage el marcador mínimo opaco (sin cuerpo clínico)
-      localStorage.setItem(
-        'cu17_recovery_10_1_902',
-        JSON.stringify({
-          id_dosis: 902,
-          id_tratamiento: 15,
-          idempotency_key: 'idem-recuperacion-e2e',
-          timestamp: Date.now(),
-          id_usuario: 10,
-          id_clinica: 1,
-        })
-      );
+      const recoveryMarker = {
+        id_dosis: 902,
+        id_tratamiento: 15,
+        idempotency_key: 'idem-recuperacion-e2e',
+        timestamp: Date.now(),
+        id_usuario: 10,
+        id_clinica: 1,
+      };
 
       // Simular endpoint de verificación de idempotencia
       cy.intercept('GET', '**/api/v1/tratamientos/dosis/902/registros/idempotencia/idem-recuperacion-e2e', {
@@ -622,10 +617,24 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
 
       cy.visit('/tratamientos/15/cronograma', {
         onBeforeLoad(win) {
-          // Una operación anterior del mismo spec no debe sustituir el marcador opaco.
+          // Restaurar la sesión y el marcador antes de que Angular evalúe los guards.
+          // El caso anterior cierra sesión y Cypress puede limpiar el almacenamiento entre casos.
+          win.localStorage.setItem('access_token', 'mock-patient-access-token');
+          win.localStorage.setItem('user_profile', JSON.stringify({
+            id_usuario: 10,
+            id_clinica: 1,
+            nombres: 'Carlos',
+            apellidos: 'Mamani',
+            correo: 'paciente@test.com',
+            rol: 'PACIENTE',
+            estado: 'ACTIVO',
+          }));
+          win.localStorage.setItem('remember_me', 'true');
+          win.localStorage.setItem('cu17_recovery_10_1_902', JSON.stringify(recoveryMarker));
           win.sessionStorage.removeItem('pending_dose_10_1_902');
         },
       });
+      cy.url().should('include', '/tratamientos/15/cronograma');
       cy.wait('@getCronogramaRecovery');
 
       // La dosis con marcador muestra la acción de recuperación, no "Registrar toma".
