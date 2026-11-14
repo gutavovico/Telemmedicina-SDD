@@ -1,0 +1,177 @@
+<main class="usage-page">
+  <header class="page-header">
+    <div>
+      <p class="eyebrow">Administración de la clínica</p>
+      <h1>Plan y consumo</h1>
+      <p class="subtitle">Consulta el uso del ciclo y revisa los cargos extra calculados para tu entidad.</p>
+    </div>
+    <button class="secondary-button" type="button" (click)="load()" [disabled]="loading()">
+      <span class="material-symbols-outlined">refresh</span>
+      Actualizar
+    </button>
+  </header>
+
+  @if (message()) {
+    <div class="notice-banner success-banner" role="status">
+      <span class="material-symbols-outlined">check_circle</span><span>{{ message() }}</span>
+      <button type="button" aria-label="Cerrar" (click)="message.set(null)">×</button>
+    </div>
+  }
+  @if (error()) {
+    <div class="notice-banner error-banner" role="alert">
+      <span class="material-symbols-outlined">error</span><span>{{ error() }}</span>
+      <button type="button" aria-label="Cerrar" (click)="error.set(null)">×</button>
+    </div>
+  }
+
+  @if (loading()) {
+    <section class="loading-card" aria-live="polite">Cargando consumo y liquidaciones…</section>
+  } @else {
+    @if (cycle(); as current) {
+    <section class="cycle-card">
+      <div class="cycle-heading">
+        <div>
+          <span class="cycle-label">{{ current.plan.nombre }} · versión {{ current.plan.numero }}</span>
+          <h2>Ciclo actual</h2>
+          <p>{{ formatDate(current.inicio) }} — {{ formatDate(current.fin_exclusivo) }}</p>
+        </div>
+        <span class="status-pill" [class.review-pill]="current.estado === 'REVISION_REQUERIDA'">
+          {{ statusLabel(current.estado) }}
+        </span>
+      </div>
+      <div class="summary-total">
+        <div>
+          <span class="metric-label">Excedente estimado</span>
+          <strong>{{ formatMoney(current.total_excedente_estimado) }}</strong>
+          <small>El importe puede cambiar hasta el cierre del ciclo.</small>
+        </div>
+        <div class="summary-meta">
+          <span>Actualizado {{ formatDate(current.actualizado_en) }}</span>
+          @if (unreadCount() > 0) { <span>{{ unreadCount() }} avisos sin leer</span> }
+        </div>
+      </div>
+    </section>
+
+    }
+    <section class="content-grid">
+      <div class="primary-column">
+        @if (cycle(); as current) {
+        <section class="section-card">
+          <div class="section-heading">
+            <div><h2>Uso por servicio</h2><p>Límites y tarifas de la versión contratada.</p></div>
+          </div>
+          <div class="service-list">
+            @for (service of current.servicios; track service.recurso) {
+              <article class="service-row">
+                <div class="service-topline">
+                  <div>
+                    <h3>{{ service.nombre }}</h3>
+                    <span class="muted">{{ service.recurso }} · {{ service.unidad }}</span>
+                  </div>
+                  <span class="measurement-pill" [class.pending-pill]="service.estado_medicion === 'MEDICION_NO_DISPONIBLE'">
+                    {{ service.estado_medicion === 'MEDICION_NO_DISPONIBLE' ? 'Medición no disponible' : statusLabel(service.estado_medicion) }}
+                  </span>
+                </div>
+                @if (service.estado_medicion !== 'MEDICION_NO_DISPONIBLE' && service.estado_medicion !== 'ILIMITADO' && service.limite_incluido !== null && service.limite_incluido !== '0') {
+                  <div class="usage-track" role="progressbar" [attr.aria-valuenow]="service.porcentaje_uso ?? 0" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuetext]="(service.porcentaje_uso ?? '0') + '% usado'">
+                    <div class="usage-fill" [style.width]="usageWidth(service)" [class.over-limit]="isOverLimit(service)"></div>
+                  </div>
+                  <p class="usage-percent">{{ service.porcentaje_uso ?? '0' }} % del límite</p>
+                } @else if (service.estado_medicion === 'MEDICION_NO_DISPONIBLE') {
+                  <p class="pending-copy">Este recurso no tiene una fuente de medición habilitada y no se incluye en el cobro de prueba.</p>
+                } @else if (service.estado_medicion === 'ILIMITADO') {
+                  <p class="pending-copy">Este recurso está configurado como ilimitado.</p>
+                }
+                <div class="service-metrics">
+                  <span><small>Consumo</small><strong>{{ service.consumo_validado ?? '—' }}</strong></span>
+                  <span><small>Límite</small><strong>{{ service.limite_incluido ?? 'Ilimitado' }}</strong></span>
+                  <span><small>Saldo</small><strong>{{ service.saldo_disponible ?? '—' }}</strong></span>
+                  <span><small>Excedente</small><strong>{{ service.unidades_excedidas ?? '—' }}</strong></span>
+                  <span><small>Tarifa extra</small><strong>{{ service.tarifa_excedente ? formatMoney(service.tarifa_excedente) : '—' }}</strong></span>
+                  <span class="service-charge"><small>Cargo estimado</small><strong>{{ formatMoney(service.subtotal_estimado) }}</strong></span>
+                </div>
+              </article>
+            } @empty {
+              <p class="empty-state">El plan no tiene servicios medibles configurados.</p>
+            }
+          </div>
+        </section>
+        } @else {
+          <section class="section-card no-cycle-card">
+            <span class="material-symbols-outlined">event_busy</span>
+            <h2>No hay un ciclo de suscripción vigente</h2>
+            <p>Cuando la clínica tenga una suscripción activa, aquí aparecerán su consumo y avisos.</p>
+            <a routerLink="/admin/suscripcion">Ir a Suscripción</a>
+          </section>
+        }
+
+        <section class="section-card">
+          <div class="section-heading">
+            <div><h2>Liquidaciones</h2><p>Los cargos definitivos se crean al cerrar el ciclo.</p></div>
+          </div>
+          @if (liquidations().length) {
+            <div class="liquidation-list">
+              @for (item of liquidations(); track item.id_liquidacion) {
+                <article class="liquidation-item" [class.selected-item]="selectedLiquidation()?.id_liquidacion === item.id_liquidacion">
+                  <button class="liquidation-select" type="button" (click)="selectLiquidation(item)">
+                    <span><strong>Ciclo {{ item.id_ciclo.slice(0, 8) }}</strong><small>{{ formatDate(item.emitida_en) }}</small></span>
+                    <span class="liquidation-right"><b>{{ formatMoney(item.total) }}</b><span class="status-pill">{{ statusLabel(item.estado) }}</span></span>
+                  </button>
+                  @if (item.estado === 'PENDIENTE_PAGO') {
+                    <button class="pay-button" type="button" (click)="pay(item)" [disabled]="paying()">
+                      {{ paying() ? 'Conectando con Stripe…' : 'Pagar cargo de prueba' }}
+                    </button>
+                  }
+                </article>
+              }
+            </div>
+          } @else {
+            <p class="empty-state">Todavía no hay liquidaciones. Si el ciclo supera un límite, aparecerá aquí al cierre.</p>
+          }
+        </section>
+      </div>
+
+      <aside class="side-column">
+        <section class="section-card notices-card">
+          <div class="section-heading"><div><h2>Avisos</h2><p>Umbral preventivo y límite alcanzado.</p></div><span class="count-badge">{{ notices().length }}</span></div>
+          @if (notices().length) {
+            @for (notice of notices(); track notice.id_aviso) {
+              <article class="notice-item" [class.unread-notice]="!notice.leido_en">
+                <div class="notice-icon"><span class="material-symbols-outlined">{{ notice.tipo === 'LIMITE' ? 'warning' : 'notifications' }}</span></div>
+                <div class="notice-copy"><strong>{{ notice.titulo }}</strong><p>{{ notice.mensaje }}</p><small>{{ formatDate(notice.creado_en) }}</small>
+                  @if (!notice.leido_en) { <button type="button" class="text-button" (click)="markRead(notice)">Marcar leído</button> }
+                </div>
+              </article>
+            }
+          } @else {
+            <p class="empty-state">No hay avisos para este ciclo.</p>
+          }
+        </section>
+
+        @if (selectedLiquidation(); as selected) {
+          <section class="section-card detail-card">
+            <div class="section-heading"><div><h2>Detalle del cargo</h2><p>Liquidación {{ selected.version }}</p></div></div>
+            @for (line of selected.renglones; track line.recurso) {
+              <div class="detail-line">
+                <div><strong>{{ line.recurso }}</strong><small>{{ line.unidades_excedidas }} {{ line.unidad }} × {{ formatMoney(line.tarifa_aplicada) }}</small></div>
+                <b>{{ formatMoney(line.subtotal) }}</b>
+              </div>
+            }
+            <div class="detail-total"><span>Total</span><strong>{{ formatMoney(selected.total) }}</strong></div>
+            @if (selected.motivo_revision) { <p class="review-copy">{{ selected.motivo_revision }}</p> }
+            @if (payments().length) {
+              <div class="attempt-history"><h3>Intentos de pago</h3>
+                @for (payment of payments(); track payment.id_pago_excedente) {
+                  <div><span>{{ statusLabel(payment.estado) }}</span><small>{{ formatDate(payment.creado_en) }}</small></div>
+                }
+              </div>
+            }
+            @if (receipt(); as comprobante) {
+              <div class="receipt-summary"><span>Pago confirmado {{ formatDate(comprobante.fecha_pago) }}</span><strong>Ref. Stripe {{ comprobante.referencia_stripe }}</strong></div>
+            }
+          </section>
+        }
+      </aside>
+    </section>
+  }
+</main>
