@@ -31,6 +31,11 @@ from app.modules.backup.router import router as backup_router
 from app.modules.backup import scheduler as backup_scheduler
 from app.modules.auth.planes.router import router as planes_router, plan_error_handler
 from app.modules.auth.planes.service import PlanError
+from app.modules.tenants.usage_billing.router import (
+    router as billing_overages_router, billing_error_handler, billing_http_exception_handler,
+)
+from app.modules.tenants.usage_billing import worker as billing_overages_worker
+from app.modules.tenants.usage_billing.service import BillingError, BillingHttpException
 
 
 @asynccontextmanager
@@ -54,9 +59,11 @@ async def lifespan(app: FastAPI):
 
     backup_scheduler.iniciar()
     subscription_worker.start()
+    billing_overages_worker.start()
     try:
         yield
     finally:
+        billing_overages_worker.stop()
         subscription_worker.stop()
         backup_scheduler.detener()
 
@@ -132,6 +139,11 @@ app.include_router(communications_router, prefix="/api/v1")
 app.include_router(backup_router)
 app.include_router(planes_router)
 app.add_exception_handler(PlanError, plan_error_handler)
+
+# CU36: consumo, liquidaciones inmutables y pagos Stripe test independientes.
+app.include_router(billing_overages_router)
+app.add_exception_handler(BillingError, billing_error_handler)
+app.add_exception_handler(BillingHttpException, billing_http_exception_handler)
 
 # Pagos de citas y teleconsultas + comprobantes (CU19)
 app.include_router(payments_router)
