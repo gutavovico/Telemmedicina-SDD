@@ -31,6 +31,10 @@ from app.modules.backup.models import BackupConfig  # noqa: F401
 from app.modules.tenants.models import (  # noqa: F401
     PlanVersion, TenantRequest, TenantRequestTrackingAudit, TenantSubscription, SubscriptionPayment, SubscriptionChange,
 )
+from app.modules.tenants.usage_billing.models import (  # noqa: F401
+    CicloConsumo, FotografiaConsumo, AvisoConsumo, LiquidacionExcedente,
+    RenglonLiquidacion, PagoExcedente, EventoStripeExcedente,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
