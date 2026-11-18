@@ -238,6 +238,17 @@
               <span>Suscripción</span>
             </a>
 
+            <!-- Consumo y excedentes (CU36, solo ADMIN de clínica) -->
+            <a
+              routerLink="/admin/consumo"
+              routerLinkActive="bg-white/15 text-white font-semibold border-l-4 border-secondary-fixed shadow-xs"
+              (click)="closeSidebar()"
+              class="flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-sm font-medium text-white/80 hover:bg-white/10 hover:text-white transition-all duration-150"
+            >
+              <span class="material-symbols-outlined text-[20px]">query_stats</span>
+              <span>Plan y consumo</span>
+            </a>
+
             <!-- Solicitar baja de la entidad (solo ADMIN de clínica) -->
             <a
               routerLink="/admin/solicitar-baja"
