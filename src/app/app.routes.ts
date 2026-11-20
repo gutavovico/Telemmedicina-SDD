@@ -4,7 +4,9 @@ import { panelGuard, adminOnlyGuard, staffGuard } from './core/guards/panel-acce
 import { tenantGuard } from './core/guards/tenant.guard';
 import { clinicaGuard } from './core/guards/clinica.guard';
 import { superAdminGuard } from './core/guards/super-admin.guard';
+import { permissionsGuard } from './core/guards/permissions.guard';
 import { prescriptionAccessGuard } from './features/medical-records/prescriptions/guards/prescription-access.guard';
+import { treatmentAccessGuard } from './features/medical-records/treatments/guards/treatment-access.guard';
 import { reportsAccessGuard } from './features/analytics/reportes/guards/reports-access.guard';
 import { backupAccessGuard } from './features/admin/backups/guards/backup-access.guard';
 
@@ -13,6 +15,21 @@ export const routes: Routes = [
     path: '',
     loadComponent: () => import('./features/home/home').then((m) => m.Home),
     title: 'Hospital San Juan de Dios - Telemedicina',
+  },
+  // =========================================================================
+  // 0. CU32: ONBOARDING INSTITUCIONAL PÚBLICO
+  // =========================================================================
+  {
+    path: 'solicitud-alta',
+    loadComponent: () =>
+      import('./features/tenants/public-onboarding/public-onboarding.component').then(
+        (m) => m.PublicOnboardingComponent
+      ),
+    title: 'Hospital San Juan de Dios - Solicitud de Alta Institucional',
+  },
+  {
+    path: 'seguimiento-solicitud',
+    redirectTo: 'solicitud-alta',
   },
   // =========================================================================
   // 1. MÓDULO CANÓNICO: AUTH (CU01, CU02, CU23, CU24, CU26)
@@ -37,6 +54,14 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/auth/password-recovery/recover/recover').then((m) => m.Recover),
     title: 'Hospital San Juan de Dios - Recuperar Contraseña',
+  },
+  {
+    path: 'cambiar-contrasena-temporal',
+    loadComponent: () =>
+      import('./features/auth/change-temporary-password/change-temporary-password').then(
+        (m) => m.ChangeTemporaryPassword,
+      ),
+    title: 'Hospital San Juan de Dios - Cambiar Contraseña Temporal',
   },
   {
     path: 'recuperar-contrasena',
@@ -107,6 +132,51 @@ export const routes: Routes = [
         loadComponent: () =>
           import('./features/admin/clinicas/clinicas-list').then((m) => m.ClinicasList),
         title: 'Hospital San Juan de Dios - Gestión de Clínicas',
+      },
+      {
+        path: 'tenants',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('./features/tenants/tenant-management/tenant-management.component').then(
+            (m) => m.TenantManagementComponent
+          ),
+        title: 'Hospital San Juan de Dios - Gestión de Tenants',
+      },
+      {
+        path: 'tenant-requests',
+        canActivate: [superAdminGuard],
+        loadComponent: () =>
+          import('./features/tenants/tenant-management/tenant-management.component').then(
+            (m) => m.TenantManagementComponent
+          ),
+        title: 'Hospital San Juan de Dios - Solicitudes de Ingreso',
+      },
+      {
+        path: 'suscripcion',
+        canActivate: [adminOnlyGuard],
+        loadComponent: () =>
+          import('./features/tenants/subscription-payment/subscription-payment.component').then(
+            (m) => m.SubscriptionPaymentComponent
+          ),
+        title: 'Hospital San Juan de Dios - Suscripción y Pagos',
+      },
+      {
+        path: 'consumo',
+        canActivate: [adminOnlyGuard],
+        loadComponent: () =>
+          import('./features/tenants/subscription-payment/usage-billing/usage-billing.component').then(
+            (m) => m.UsageBillingComponent
+          ),
+        title: 'Plan y consumo de la entidad',
+      },
+      {
+        path: 'solicitar-baja',
+        canActivate: [adminOnlyGuard],
+        loadComponent: () =>
+          import('./features/tenants/deactivation-request/deactivation-request.component').then(
+            (m) => m.DeactivationRequestComponent
+          ),
+        title: 'Hospital San Juan de Dios - Solicitar Baja de Entidad',
       },
       {
         path: 'usuarios',
@@ -231,6 +301,15 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Agenda Médica',
       },
       {
+        path: 'consulta-virtual',
+        canActivate: [staffGuard],
+        loadComponent: () =>
+          import('./features/admin/consulta-virtual/consulta-virtual').then(
+            (m) => m.ConsultaVirtualComponent,
+          ),
+        title: 'Hospital San Juan de Dios - Consulta Virtual',
+      },
+      {
         path: 'cola',
         canActivate: [staffGuard],
         loadComponent: () =>
@@ -325,6 +404,89 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Detalle de Documento',
       },
 
+      // CU11: Resultados de Laboratorio (carga manual, consulta, revisión de pendientes). Rutas estáticas antes de ':id'.
+      {
+        path: 'resultados-laboratorio',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-list/laboratory-result-list'
+          ).then((m) => m.LaboratoryResultList),
+        title: 'Hospital San Juan de Dios - Resultados de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/nuevo',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:create'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-form/laboratory-result-form'
+          ).then((m) => m.LaboratoryResultForm),
+        title: 'Hospital San Juan de Dios - Cargar Resultado de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/revision',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:review'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-review/laboratory-result-review'
+          ).then((m) => m.LaboratoryResultReview),
+        title: 'Hospital San Juan de Dios - Revisión de Resultados Pendientes',
+      },
+      // CU11 (bloque B): fuentes, importación por lote, informe y reintento. Exigen lab_results:sync.
+      {
+        path: 'resultados-laboratorio/fuentes',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sources/laboratory-sources'
+          ).then((m) => m.LaboratorySources),
+        title: 'Hospital San Juan de Dios - Fuentes de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-list/laboratory-sync-list'
+          ).then((m) => m.LaboratorySyncList),
+        title: 'Hospital San Juan de Dios - Sincronizaciones de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/importar',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-import/laboratory-sync-import'
+          ).then((m) => m.LaboratorySyncImport),
+        title: 'Hospital San Juan de Dios - Importar Lote de Resultados',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-detail/laboratory-sync-detail'
+          ).then((m) => m.LaboratorySyncDetail),
+        title: 'Hospital San Juan de Dios - Informe de Sincronización',
+      },
+      {
+        path: 'resultados-laboratorio/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-detail/laboratory-result-detail'
+          ).then((m) => m.LaboratoryResultDetail),
+        title: 'Hospital San Juan de Dios - Detalle de Resultado de Laboratorio',
+      },
+
       {
         path: 'recetas/emitir',
         canActivate: [staffGuard, prescriptionAccessGuard],
@@ -353,11 +515,65 @@ export const routes: Routes = [
           ).then((m) => m.PrescriptionList),
         title: 'Hospital San Juan de Dios - Recetas Médicas',
       },
+      // CU17: Tratamientos médicos (staff/médico)
+      {
+        path: 'tratamientos/crear',
+        canActivate: [staffGuard, treatmentAccessGuard],
+        data: { roles: ['doctor'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/treatments/pages/treatment-create/treatment-create'
+          ).then((m) => m.TreatmentCreate),
+        title: 'Hospital San Juan de Dios - Crear Plan de Tratamiento',
+      },
+      {
+        path: 'tratamientos/avisos',
+        canActivate: [staffGuard, treatmentAccessGuard],
+        loadComponent: () =>
+          import(
+            './features/medical-records/treatments/pages/treatment-alerts/treatment-alerts'
+          ).then((m) => m.TreatmentAlerts),
+        title: 'Hospital San Juan de Dios - Avisos de Tratamiento',
+      },
+      {
+        path: 'tratamientos/:id/cronograma',
+        canActivate: [staffGuard, treatmentAccessGuard],
+        loadComponent: () =>
+          import(
+            './features/medical-records/treatments/pages/treatment-schedule/treatment-schedule'
+          ).then((m) => m.TreatmentSchedule),
+        title: 'Hospital San Juan de Dios - Cronograma de Tratamiento',
+      },
+      {
+        path: 'tratamientos/:id',
+        canActivate: [staffGuard, treatmentAccessGuard],
+        loadComponent: () =>
+          import(
+            './features/medical-records/treatments/pages/treatment-detail/treatment-detail'
+          ).then((m) => m.TreatmentDetail),
+        title: 'Hospital San Juan de Dios - Detalle de Tratamiento',
+      },
+      {
+        path: 'tratamientos',
+        canActivate: [staffGuard, treatmentAccessGuard],
+        loadComponent: () =>
+          import(
+            './features/medical-records/treatments/pages/treatment-list/treatment-list'
+          ).then((m) => m.TreatmentList),
+        title: 'Hospital San Juan de Dios - Tratamientos Médicos',
+      },
       {
         path: 'teleconsulta',
         canActivate: [staffGuard],
         loadComponent: () =>
-          import('./features/teleconsulta/teleconsulta-page').then((m) => m.TeleconsultaPage),
+          import('./features/admin/consulta-virtual/consulta-virtual').then((m) => m.ConsultaVirtualComponent),
+        title: 'Hospital San Juan de Dios - Teleconsulta y Chat',
+      },
+      {
+        path: 'teleconsulta/:id',
+        canActivate: [staffGuard],
+        loadComponent: () =>
+          import('./features/admin/consulta-virtual/consulta-virtual').then((m) => m.ConsultaVirtualComponent),
         title: 'Hospital San Juan de Dios - Teleconsulta y Chat',
       },
       {
@@ -522,12 +738,55 @@ export const routes: Routes = [
       ),
     title: 'Hospital San Juan de Dios - Mis Citas',
   },
+  // =========================================================================
+  // CU19: Pagos de citas y teleconsultas + comprobantes digitales
+  // =========================================================================
+  {
+    path: 'pagos/resultado',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/payments/payment-result/payment-result.component').then(
+        (m) => m.PaymentResultComponent
+      ),
+    title: 'Hospital San Juan de Dios - Resultado del Pago',
+  },
+  {
+    path: 'pagos/checkout/:idCita',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/payments/payment-checkout/payment-checkout.component').then(
+        (m) => m.PaymentCheckoutComponent
+      ),
+    title: 'Hospital San Juan de Dios - Pago en Línea',
+  },
+  {
+    path: 'pagos',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/payments/payment-history/payment-history.component').then(
+        (m) => m.PaymentHistoryComponent
+      ),
+    title: 'Hospital San Juan de Dios - Mis Pagos',
+  },
   {
     path: 'mi-cola',
     canActivate: [authGuard],
     loadComponent: () =>
       import('./features/appointments/live-queue/mi-cola/mi-cola').then((m) => m.MiCola),
     title: 'Hospital San Juan de Dios - Mi Turno en Fila',
+  },
+  {
+    path: 'especialistas',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/appointments/specialist-search/specialist-search.component').then(
+        (m) => m.SpecialistSearchComponent
+      ),
+    title: 'Hospital San Juan de Dios - Buscar Especialistas',
+  },
+  {
+    path: 'appointments/specialist-search',
+    redirectTo: 'especialistas',
   },
 
   // =========================================================================
@@ -766,6 +1025,53 @@ export const routes: Routes = [
       ),
     title: 'Hospital San Juan de Dios - Recetas Médicas',
   },
+  // CU17: Tratamientos médicos (médico y paciente titular)
+  {
+    path: 'tratamientos/crear',
+    canActivate: [authGuard, treatmentAccessGuard],
+    data: { roles: ['doctor'] },
+    loadComponent: () =>
+      import(
+        './features/medical-records/treatments/pages/treatment-create/treatment-create'
+      ).then((m) => m.TreatmentCreate),
+    title: 'Hospital San Juan de Dios - Crear Plan de Tratamiento',
+  },
+  {
+    path: 'tratamientos/avisos',
+    canActivate: [authGuard, treatmentAccessGuard],
+    loadComponent: () =>
+      import(
+        './features/medical-records/treatments/pages/treatment-alerts/treatment-alerts'
+      ).then((m) => m.TreatmentAlerts),
+    title: 'Hospital San Juan de Dios - Avisos de Tratamiento',
+  },
+  {
+    path: 'tratamientos/:id/cronograma',
+    canActivate: [authGuard, treatmentAccessGuard],
+    loadComponent: () =>
+      import(
+        './features/medical-records/treatments/pages/treatment-schedule/treatment-schedule'
+      ).then((m) => m.TreatmentSchedule),
+    title: 'Hospital San Juan de Dios - Cronograma de Tratamiento',
+  },
+  {
+    path: 'tratamientos/:id',
+    canActivate: [authGuard, treatmentAccessGuard],
+    loadComponent: () =>
+      import(
+        './features/medical-records/treatments/pages/treatment-detail/treatment-detail'
+      ).then((m) => m.TreatmentDetail),
+    title: 'Hospital San Juan de Dios - Detalle de Tratamiento',
+  },
+  {
+    path: 'tratamientos',
+    canActivate: [authGuard, treatmentAccessGuard],
+    loadComponent: () =>
+      import(
+        './features/medical-records/treatments/pages/treatment-list/treatment-list'
+      ).then((m) => m.TreatmentList),
+    title: 'Hospital San Juan de Dios - Tratamientos Médicos',
+  },
   {
     path: 'validar-receta/:codigo',
     loadComponent: () =>
@@ -794,7 +1100,8 @@ export const routes: Routes = [
   },
   {
     path: 'ia-asistente',
-    canActivate: [authGuard],
+    canActivate: [authGuard, permissionsGuard],
+    data: { permissions: ['assistance:evaluate', 'assistance:read'] },
     loadComponent: () => import('./features/ai-assistant/ai-assistant').then((m) => m.AiAssistant),
     title: 'Hospital San Juan de Dios - Asistente IA',
   },
@@ -806,14 +1113,14 @@ export const routes: Routes = [
     path: 'teleconsulta',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/teleconsulta/teleconsulta-page').then((m) => m.TeleconsultaPage),
+      import('./features/teleconsulta-paciente/teleconsulta-paciente').then((m) => m.TeleconsultaPacienteComponent),
     title: 'Hospital San Juan de Dios - Teleconsulta y Chat',
   },
   {
     path: 'citas/:id/teleconsulta',
     canActivate: [authGuard],
     loadComponent: () =>
-      import('./features/teleconsulta/teleconsulta-page').then((m) => m.TeleconsultaPage),
+      import('./features/teleconsulta-paciente/teleconsulta-paciente').then((m) => m.TeleconsultaPacienteComponent),
     title: 'Hospital San Juan de Dios - Teleconsulta y Chat',
   },
 

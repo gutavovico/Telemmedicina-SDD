@@ -1,0 +1,635 @@
+<div class="min-h-screen flex flex-col justify-between bg-surface">
+  <app-header />
+
+  <main class="flex-grow px-margin-mobile md:px-margin-desktop py-8 md:py-12 max-w-container-max mx-auto w-full pt-[88px]">
+    <!-- Encabezado de la página -->
+    <div class="flex flex-col gap-2 mb-8">
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-primary-fixed text-primary text-xs font-extrabold uppercase tracking-wide">
+          <span class="material-symbols-outlined text-[16px]">psychology</span>
+          <span>IA</span>
+        </span>
+        <span class="text-xs font-semibold uppercase tracking-wider text-on-surface-variant">
+          CU18 · Apoyo Clínico
+        </span>
+      </div>
+
+      <h1 class="text-headline-lg-mobile md:text-display-lg font-headline-lg-mobile md:font-display-lg text-primary">
+        Asistencia Inteligente de Tratamiento
+      </h1>
+      <p class="text-body-lg font-body-lg text-on-surface-variant max-w-3xl">
+        Revisa posibles interacciones farmacológicas entre tus medicamentos prescritos y recibe recomendaciones de autocuidado basadas en tu historial clínico.
+      </p>
+    </div>
+
+    <!-- Navegación entre Pestañas -->
+    <div class="flex border-b border-outline-variant/40 mb-8 gap-2">
+      <button
+        type="button"
+        (click)="cambiarTab('evaluacion')"
+        [class]="tabActiva() === 'evaluacion'
+          ? 'flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 border-primary text-primary transition'
+          : 'flex items-center gap-2 px-6 py-3 font-semibold text-sm text-on-surface-variant hover:text-primary transition'"
+      >
+        <span class="material-symbols-outlined text-lg">medical_services</span>
+        <span>Evaluación</span>
+      </button>
+
+      <button
+        type="button"
+        (click)="cambiarTab('historial')"
+        [class]="tabActiva() === 'historial'
+          ? 'flex items-center gap-2 px-6 py-3 font-bold text-sm border-b-2 border-primary text-primary transition'
+          : 'flex items-center gap-2 px-6 py-3 font-semibold text-sm text-on-surface-variant hover:text-primary transition'"
+      >
+        <span class="material-symbols-outlined text-lg">history</span>
+        <span>Historial</span>
+      </button>
+    </div>
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 1: EVALUACIÓN                                                 -->
+    <!-- ===================================================================== -->
+    @if (tabActiva() === 'evaluacion') {
+      <div class="flex flex-col gap-6">
+        <!-- Panel de acción principal -->
+        <div class="bg-surface-container-lowest rounded-3xl p-6 md:p-8 shadow-level-1 border border-outline-variant/30 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div class="flex flex-col gap-2 max-w-2xl">
+            <h2 class="text-title-lg font-title-lg text-primary">Evaluación Asistida Bajo Demanda</h2>
+            <p class="text-body-md font-body-md text-on-surface-variant">
+              El sistema analiza tus recetas vigentes y antecedentes para detectar posibles contraindicaciones farmacológicas y sugerirte pautas saludables.
+            </p>
+          </div>
+
+          @if (puedeEvaluar()) {
+            <button
+              type="button"
+              (click)="solicitarEvaluacion(false)"
+              [disabled]="isLoading()"
+              class="inline-flex items-center justify-center gap-2 px-6 py-3.5 rounded-2xl bg-primary text-white font-bold text-sm shadow-level-1 hover:bg-primary-container transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              @if (isLoading()) {
+                <span class="inline-block w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>Evaluando tratamiento...</span>
+              } @else {
+                <span class="material-symbols-outlined text-lg">sync</span>
+                <span>Solicitar evaluación asistida</span>
+              }
+            </button>
+          } @else if (esDoctor()) {
+            <div class="px-4 py-2 rounded-xl bg-surface-container-low text-xs font-semibold text-on-surface-variant border border-outline-variant/40">
+              Modo Auditoría Médica: consulta el historial en la pestaña contigua.
+            </div>
+          }
+        </div>
+
+        <!-- Alerta de Límite de Peticiones (429 Rate Limit) -->
+        @if (errorCode() === 'RATE_LIMIT_EXCEEDED') {
+          <div class="p-5 rounded-2xl bg-amber-50 border-2 border-amber-300 text-amber-950 flex items-start gap-4 shadow-sm">
+            <span class="material-symbols-outlined text-amber-600 text-2xl">schedule</span>
+            <div class="flex flex-col gap-1">
+              <h3 class="font-bold text-sm">Límite de solicitudes alcanzado (429)</h3>
+              <p class="text-xs leading-relaxed text-amber-900">
+                Has alcanzado el límite de 10 evaluaciones por hora para cuidar la estabilidad del servicio.
+                @if (retryAfterSeconds()) {
+                  <span> Por favor espera aproximadamente {{ retryAfterSeconds() }} segundos antes de reintentar.</span>
+                } @else {
+                  <span> Por favor intenta nuevamente más tarde.</span>
+                }
+              </p>
+            </div>
+          </div>
+        }
+
+        <!-- Alerta de Error de Red / General -->
+        @if (errorMessage() && errorCode() !== 'RATE_LIMIT_EXCEEDED') {
+          <div class="p-5 rounded-2xl bg-error-container border-2 border-error/40 text-on-error-container flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-sm">
+            <div class="flex items-start gap-3">
+              <span class="material-symbols-outlined text-error text-2xl">error</span>
+              <div class="flex flex-col gap-1">
+                <h3 class="font-bold text-sm">Error de comunicación</h3>
+                <p class="text-xs leading-relaxed">{{ errorMessage() }}</p>
+              </div>
+            </div>
+            <button
+              type="button"
+              (click)="solicitarEvaluacion(true)"
+              class="px-4 py-2 rounded-xl bg-error text-white font-bold text-xs hover:bg-error/90 transition cursor-pointer whitespace-nowrap self-end sm:self-auto"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+
+        <!-- Estado Cargando -->
+        @if (isLoading()) {
+          <div class="py-16 text-center flex flex-col items-center justify-center gap-4 bg-surface-container-lowest rounded-3xl border border-outline-variant/30">
+            <div class="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-body-md font-body-md text-on-surface-variant font-medium">
+              Analizando interacciones farmacológicas y recomendaciones de autocuidado...
+            </p>
+          </div>
+        }
+
+        <!-- Resultado de la Evaluación -->
+        @if (evaluacionActual() && !isLoading()) {
+          <div class="flex flex-col gap-6">
+            <!-- Caso 1: Sin tratamiento activo -->
+            @if (evaluacionActual()?.estado_evaluacion === 'SIN_TRATAMIENTO_VIGENTE') {
+              <div class="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/40 flex items-start gap-4">
+                <span class="material-symbols-outlined text-primary text-3xl">info</span>
+                <div class="flex flex-col gap-1">
+                  <h3 class="font-bold text-base text-primary">Sin tratamiento activo</h3>
+                  <p class="text-sm text-on-surface-variant leading-relaxed">
+                    {{ evaluacionActual()?.resumen_ejecutivo || 'No cuentas con recetas ni medicamentos vigentes registrados en la clínica en este momento.' }}
+                  </p>
+                </div>
+              </div>
+            } @else {
+              <!-- Banner de Modo Degradado si aplica -->
+              @if (evaluacionActual()?.estado_evaluacion === 'DEGRADADO_REGLAS_BASE') {
+                <div class="p-4 rounded-2xl bg-amber-50 border border-amber-300 text-amber-950 flex items-start gap-3">
+                  <span class="material-symbols-outlined text-amber-600 text-xl">report_problem</span>
+                  <div class="text-xs leading-relaxed">
+                    <span class="font-bold">Evaluación con reglas clínicas base:</span> las sugerencias generativas no estuvieron disponibles temporalmente, pero tus alertas farmacológicas están garantizadas.
+                  </div>
+                </div>
+              }
+
+              <!-- Resumen de Riesgo y Totales -->
+              <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-2xl bg-surface-container-low border border-outline-variant/30">
+                <div class="flex items-center gap-3">
+                  <span class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">Riesgo consolidado:</span>
+                  <span
+                    class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-extrabold uppercase tracking-wider"
+                    [ngClass]="getClaseRiesgo(evaluacionActual()!.nivel_riesgo_global)"
+                  >
+                    <span class="material-symbols-outlined text-[16px]">{{ getIconoRiesgo(evaluacionActual()!.nivel_riesgo_global) }}</span>
+                    <span>{{ evaluacionActual()!.nivel_riesgo_global }}</span>
+                  </span>
+                </div>
+
+                <div class="text-xs font-semibold text-on-surface-variant">
+                  <span>{{ evaluacionActual()!.total_medicamentos_analizados }} medicamentos analizados</span>
+                  <span class="mx-2">·</span>
+                  <span>{{ evaluacionActual()!.total_alertas_detectadas }} alertas detectadas</span>
+                </div>
+              </div>
+
+              <!-- SECCIÓN A: Alertas Farmacológicas -->
+              <div class="flex flex-col gap-4">
+                <h3 class="text-title-md font-title-md text-primary flex items-center gap-2">
+                  <span class="material-symbols-outlined text-xl">warning</span>
+                  <span>Alertas Farmacológicas ({{ evaluacionActual()!.total_alertas_detectadas }})</span>
+                </h3>
+
+                @if (evaluacionActual()!.alertas.length === 0) {
+                  <!-- Criterio 5: Sin interacciones -->
+                  <div class="p-5 rounded-2xl bg-surface-container-lowest border border-outline-variant/40 flex items-center gap-3 text-emerald-800">
+                    <span class="material-symbols-outlined text-emerald-600 text-2xl">check_circle</span>
+                    <span class="text-sm font-medium">
+                      {{ evaluacionActual()!.resumen_ejecutivo || 'No se detectaron interacciones adversas entre sus medicamentos vigentes.' }}
+                    </span>
+                  </div>
+                } @else {
+                  <div class="flex flex-col gap-3">
+                    @for (alerta of evaluacionActual()!.alertas; track $index) {
+                      <div class="rounded-2xl p-5 transition" [ngClass]="getClaseSeveridadCard(alerta.severidad)">
+                        <div class="flex flex-col gap-3">
+                          <!-- Cabecera de la alerta -->
+                          <div class="flex items-start justify-between gap-3 flex-wrap">
+                            <div class="flex items-center gap-2">
+                              <span
+                                class="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-extrabold uppercase tracking-wide"
+                                [ngClass]="getClaseSeveridadBadge(alerta.severidad)"
+                              >
+                                <span class="material-symbols-outlined text-[14px]">{{ getIconoSeveridad(alerta.severidad) }}</span>
+                                <span>SEVERIDAD {{ alerta.severidad }}</span>
+                              </span>
+                              <span class="text-sm font-bold text-primary">
+                                {{ alerta.medicamento_1_nombre }} + {{ alerta.medicamento_2_nombre }}
+                              </span>
+                            </div>
+                          </div>
+
+                          <!-- Mensaje explicativo -->
+                          <p class="text-sm font-semibold leading-relaxed">
+                            {{ alerta.mensaje_alerta }}
+                          </p>
+
+                          <!-- Pauta precautoria -->
+                          <p class="text-xs leading-relaxed opacity-90">
+                            {{ alerta.pauta_precaucion }}
+                          </p>
+
+                          <!-- Botón de orientación ante alertas graves -->
+                          @if (alerta.severidad === 'GRAVE') {
+                            <div class="pt-2">
+                              <button
+                                type="button"
+                                (click)="abrirModalUrgencia()"
+                                class="inline-flex items-center gap-2 px-4 py-2 rounded-xl bg-white text-error border-2 border-error font-bold text-xs hover:bg-error-container/20 transition cursor-pointer"
+                              >
+                                <span class="material-symbols-outlined text-base">info</span>
+                                <span>Qué hacer ante una urgencia</span>
+                              </button>
+                            </div>
+                          }
+                        </div>
+                      </div>
+                    }
+                  </div>
+                }
+              </div>
+
+              <!-- SECCIÓN B: Sugerencias de Autocuidado -->
+              @if (evaluacionActual()!.recomendaciones.length > 0) {
+                <div class="flex flex-col gap-4">
+                  <h3 class="text-title-md font-title-md text-primary flex items-center gap-2">
+                    <span class="material-symbols-outlined text-xl">health_and_safety</span>
+                    <span>Sugerencias de Autocuidado</span>
+                  </h3>
+
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    @for (rec of evaluacionActual()!.recomendaciones; track $index) {
+                      <div class="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/40 shadow-sm flex flex-col gap-2.5">
+                        <div class="flex items-center justify-between gap-2">
+                          <div class="flex items-center gap-2">
+                            <span class="material-symbols-outlined text-secondary text-lg">
+                              {{ getIconoCategoria(rec.categoria) }}
+                            </span>
+                            <span class="font-bold text-sm text-primary">{{ rec.titulo }}</span>
+                          </div>
+
+                          <span class="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider"
+                                [class]="rec.origen === 'IA_GENERATIVA' ? 'bg-primary-fixed text-primary' : 'bg-surface-container text-on-surface-variant'">
+                            {{ rec.origen === 'IA_GENERATIVA' ? 'IA' : 'GUÍA' }}
+                          </span>
+                        </div>
+
+                        <p class="text-xs text-on-surface leading-relaxed">
+                          {{ rec.detalle }}
+                        </p>
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+
+              <!-- SECCIÓN C: Medicamentos Analizados -->
+              @if (evaluacionActual()!.medicamentos_analizados.length > 0) {
+                <div class="flex flex-col gap-3 pt-2">
+                  <h4 class="text-xs font-bold uppercase tracking-wider text-on-surface-variant">
+                    Medicamentos incluidos en esta evaluación:
+                  </h4>
+                  <div class="flex flex-wrap gap-2">
+                    @for (med of evaluacionActual()!.medicamentos_analizados; track $index) {
+                      <div class="px-3 py-1.5 rounded-xl bg-surface-container-lowest border border-outline-variant/40 text-xs font-semibold text-primary flex items-center gap-1.5 shadow-sm">
+                        <span class="material-symbols-outlined text-sm text-secondary">medication</span>
+                        <span>{{ med.nombre || med.principio_activo }}</span>
+                        @if (med.dosis) {
+                          <span class="text-on-surface-variant font-normal">({{ med.dosis }})</span>
+                        }
+                      </div>
+                    }
+                  </div>
+                </div>
+              }
+            }
+          </div>
+        }
+
+        <!-- Estado Inicial (antes de pulsar el botón) -->
+        @if (!evaluacionActual() && !isLoading() && !errorMessage()) {
+          <div class="py-16 px-6 text-center flex flex-col items-center justify-center gap-3 bg-surface-container-lowest rounded-3xl border border-outline-variant/30">
+            <span class="material-symbols-outlined text-primary/40 text-6xl">medication_liquid</span>
+            <h3 class="text-title-md font-title-md text-primary font-bold">Evaluación bajo demanda</h3>
+            <p class="text-body-sm font-body-sm text-on-surface-variant max-w-md">
+              Presiona el botón superior para contrastar tus medicamentos vigentes contra el catálogo farmacológico y recibir sugerencias personalizadas.
+            </p>
+          </div>
+        }
+
+        <!-- Aviso legal permanente RF-25 -->
+        <div class="p-4 rounded-2xl bg-surface-container-low border border-outline-variant/40 text-on-surface-variant flex items-start gap-3 mt-4">
+          <span class="material-symbols-outlined text-secondary text-xl">info</span>
+          <div class="flex flex-col gap-0.5 text-xs">
+            <span class="font-bold text-on-surface">
+              Sugerencias de apoyo. La IA nunca modifica diagnósticos, dosis ni tratamientos.
+            </span>
+            <span class="opacity-90 leading-relaxed">
+              {{ evaluacionActual()?.aviso_legal || 'Esta asistencia inteligente no sustituye la valoración médica profesional presencial. Ante emergencias acuda a su centro de salud.' }}
+            </span>
+          </div>
+        </div>
+      </div>
+    }
+
+    <!-- ===================================================================== -->
+    <!-- PESTAÑA 2: HISTORIAL                                                  -->
+    <!-- ===================================================================== -->
+    @if (tabActiva() === 'historial') {
+      <div class="flex flex-col gap-6">
+        <!-- Barra de búsqueda / contexto médico -->
+        @if (esDoctor()) {
+          <div class="p-6 rounded-3xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col sm:flex-row items-stretch sm:items-center gap-4 shadow-sm">
+            <div class="flex-grow flex items-center gap-2">
+              <span class="material-symbols-outlined text-secondary text-2xl">search</span>
+              <input
+                type="number"
+                [(ngModel)]="idPacienteMedico"
+                placeholder="Ingresa el ID del paciente para consultar su historial"
+                class="w-full px-4 py-2.5 rounded-xl bg-surface-container-low border border-outline-variant/50 text-sm text-on-surface focus:outline-none focus:border-primary"
+              />
+            </div>
+            <button
+              type="button"
+              (click)="buscarHistorialMedico()"
+              [disabled]="!idPacienteMedico() || isLoadingHistorial()"
+              class="px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary-container transition disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              Consultar historial
+            </button>
+          </div>
+        }
+
+        <!-- Estado de Carga del Historial -->
+        @if (isLoadingHistorial()) {
+          <div class="py-16 text-center flex flex-col items-center justify-center gap-4 bg-surface-container-lowest rounded-3xl border border-outline-variant/30">
+            <div class="w-10 h-10 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+            <p class="text-body-sm text-on-surface-variant">Cargando evaluaciones previas...</p>
+          </div>
+        }
+
+        <!-- Error en el Historial -->
+        @if (historialError() && !isLoadingHistorial()) {
+          <div class="p-5 rounded-2xl bg-error-container text-on-error-container flex items-center justify-between gap-4">
+            <div class="flex items-center gap-2">
+              <span class="material-symbols-outlined text-error">error</span>
+              <span class="text-xs font-semibold">{{ historialError() }}</span>
+            </div>
+            <button
+              type="button"
+              (click)="cargarHistorial(paginaHistorial())"
+              class="px-3 py-1.5 rounded-xl bg-error text-white text-xs font-bold hover:bg-error/90 cursor-pointer"
+            >
+              Reintentar
+            </button>
+          </div>
+        }
+
+        <!-- Sin Evaluaciones Previas -->
+        @if (!isLoadingHistorial() && !historialError() && itemsHistorial().length === 0) {
+          <div class="py-16 px-6 text-center flex flex-col items-center justify-center gap-3 bg-surface-container-lowest rounded-3xl border border-outline-variant/30">
+            <span class="material-symbols-outlined text-on-surface-variant/40 text-5xl">history_toggle_off</span>
+            <h3 class="text-title-md font-title-md text-primary font-bold">Sin evaluaciones previas</h3>
+            <p class="text-body-sm font-body-sm text-on-surface-variant max-w-md">
+              Cuando solicites asistencia para tu tratamiento, cada resultado quedará registrado aquí con su fecha y nivel de riesgo.
+            </p>
+          </div>
+        }
+
+        <!-- Lista de Evaluaciones Previas -->
+        @if (!isLoadingHistorial() && itemsHistorial().length > 0) {
+          <div class="flex flex-col gap-3">
+            @for (item of itemsHistorial(); track item.id_evaluacion) {
+              <div class="bg-surface-container-lowest rounded-2xl p-5 border border-outline-variant/40 shadow-sm flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 hover:border-primary/40 transition">
+                <div class="flex items-start gap-4">
+                  <div
+                    class="w-12 h-12 rounded-2xl flex items-center justify-center flex-shrink-0"
+                    [ngClass]="getClaseRiesgo(item.nivel_riesgo_global)"
+                  >
+                    <span class="material-symbols-outlined text-2xl">
+                      {{ getIconoRiesgo(item.nivel_riesgo_global) }}
+                    </span>
+                  </div>
+
+                  <div class="flex flex-col gap-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                      <span class="font-bold text-sm text-primary">Evaluación #{{ item.id_evaluacion }}</span>
+                      <span
+                        class="px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase tracking-wide"
+                        [ngClass]="getClaseRiesgo(item.nivel_riesgo_global)"
+                      >
+                        {{ item.nivel_riesgo_global }}
+                      </span>
+                    </div>
+
+                    <div class="text-xs text-on-surface-variant flex items-center gap-2">
+                      <span>Fecha: {{ item.fecha_evaluacion | date:'dd/MM/yyyy HH:mm' }}</span>
+                      <span>·</span>
+                      <span>{{ item.total_medicamentos_analizados }} medicamentos</span>
+                      <span>·</span>
+                      <span [class.text-error]="item.nivel_riesgo_global === 'ALTO' || item.total_alertas_detectadas > 0"
+                            [class.font-bold]="item.nivel_riesgo_global === 'ALTO'">
+                        {{ item.total_alertas_detectadas }} alertas
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  (click)="verDetalle(item.id_evaluacion)"
+                  class="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary font-bold text-xs transition cursor-pointer self-end sm:self-auto"
+                >
+                  <span>Ver detalle</span>
+                  <span class="material-symbols-outlined text-sm">chevron_right</span>
+                </button>
+              </div>
+            }
+          </div>
+
+          <!-- Paginación -->
+          @if (historialData() && historialData()!.total_paginas > 1) {
+            <div class="flex items-center justify-between p-4 bg-surface-container-lowest rounded-2xl border border-outline-variant/30 text-xs text-on-surface-variant">
+              <span>
+                Página {{ paginaHistorial() }} de {{ historialData()!.total_paginas }} (Total: {{ historialData()!.total }})
+              </span>
+
+              <div class="flex items-center gap-2">
+                <button
+                  type="button"
+                  (click)="paginaAnterior()"
+                  [disabled]="paginaHistorial() <= 1"
+                  class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-variant font-bold text-xs disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  Anterior
+                </button>
+                <button
+                  type="button"
+                  (click)="paginaSiguiente()"
+                  [disabled]="paginaHistorial() >= historialData()!.total_paginas"
+                  class="px-3 py-1.5 rounded-lg bg-surface-container-low hover:bg-surface-variant font-bold text-xs disabled:opacity-40 cursor-pointer disabled:cursor-not-allowed"
+                >
+                  Siguiente
+                </button>
+              </div>
+            </div>
+          }
+        }
+      </div>
+    }
+  </main>
+
+  <app-footer />
+</div>
+
+<!-- ========================================================================= -->
+<!-- MODAL: QUÉ HACER ANTE UNA URGENCIA                                       -->
+<!-- ========================================================================= -->
+@if (modalUrgenciaAbierto()) {
+  <div
+    class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-urgencia-titulo"
+  >
+    <div class="bg-surface-container-lowest rounded-3xl p-6 md:p-8 max-w-lg w-full shadow-level-3 border border-outline-variant/30 flex flex-col gap-6 animate-scale-in">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-2xl bg-error-container text-error flex items-center justify-center">
+          <span class="material-symbols-outlined text-2xl">warning</span>
+        </div>
+        <h2 id="modal-urgencia-titulo" class="text-title-lg font-title-lg text-primary font-bold">
+          Qué hacer ante una urgencia
+        </h2>
+      </div>
+
+      <div class="flex flex-col gap-3 text-sm text-on-surface leading-relaxed">
+        <p>
+          Si presenta síntomas graves (como dificultad para respirar, dolor intenso en el pecho o abdomen, sangrado anormal o mareos severos), acuda de inmediato al centro de urgencias más cercano o llame al número de emergencias de su localidad.
+        </p>
+
+        <div class="p-3.5 rounded-xl bg-error-container/60 border border-error/40 text-error font-semibold text-xs leading-normal">
+          Consulte con su médico tratante antes de continuar tomando los medicamentos señalados con interacción.
+        </div>
+      </div>
+
+      <div class="flex justify-end pt-2">
+        <button
+          type="button"
+          (click)="cerrarModalUrgencia()"
+          class="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-primary text-white font-bold text-sm hover:bg-primary-container transition cursor-pointer"
+        >
+          Entendido
+        </button>
+      </div>
+    </div>
+  </div>
+}
+
+<!-- ========================================================================= -->
+<!-- MODAL: DETALLE COMPLETO DE EVALUACIÓN HISTÓRICA                          -->
+<!-- ========================================================================= -->
+@if (modalDetalleAbierto()) {
+  <div
+    class="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-xs"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="modal-detalle-titulo"
+  >
+    <div class="bg-surface-container-lowest rounded-3xl p-6 md:p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto shadow-level-3 border border-outline-variant/30 flex flex-col gap-6">
+      <div class="flex items-start justify-between gap-4 border-b border-outline-variant/30 pb-4">
+        <div>
+          <h2 id="modal-detalle-titulo" class="text-title-lg font-title-lg text-primary font-bold">
+            Detalle de Evaluación #{{ evaluacionDetalle()?.id_evaluacion }}
+          </h2>
+          <p class="text-xs text-on-surface-variant">
+            Fecha: {{ evaluacionDetalle()?.fecha_evaluacion | date:'dd/MM/yyyy HH:mm' }}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          (click)="cerrarModalDetalle()"
+          class="p-2 rounded-xl text-on-surface-variant hover:bg-surface-variant transition cursor-pointer"
+          aria-label="Cerrar modal"
+        >
+          <span class="material-symbols-outlined text-xl">close</span>
+        </button>
+      </div>
+
+      @if (isLoadingDetalle()) {
+        <div class="py-12 text-center flex flex-col items-center justify-center gap-3">
+          <div class="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-xs text-on-surface-variant">Cargando reporte de evaluación...</span>
+        </div>
+      }
+
+      @if (detalleError() && !isLoadingDetalle()) {
+        <div class="p-4 rounded-2xl bg-error-container text-on-error-container text-xs">
+          {{ detalleError() }}
+        </div>
+      }
+
+      @if (evaluacionDetalle() && !isLoadingDetalle()) {
+        <div class="flex flex-col gap-5">
+          <!-- Riesgo global -->
+          <div class="flex items-center gap-2">
+            <span class="text-xs font-bold text-on-surface-variant uppercase tracking-wider">Riesgo global:</span>
+            <span
+              class="px-2.5 py-0.5 rounded-full text-xs font-extrabold uppercase tracking-wide"
+              [ngClass]="getClaseRiesgo(evaluacionDetalle()!.nivel_riesgo_global)"
+            >
+              {{ evaluacionDetalle()!.nivel_riesgo_global }}
+            </span>
+          </div>
+
+          <!-- Alertas -->
+          <div class="flex flex-col gap-3">
+            <h3 class="text-sm font-bold text-primary">
+              Alertas ({{ evaluacionDetalle()!.total_alertas_detectadas }})
+            </h3>
+
+            @if (evaluacionDetalle()!.alertas.length === 0) {
+              <p class="text-xs text-emerald-800 bg-emerald-50 p-3 rounded-xl">
+                No se registraron alertas de interacción en esta evaluación.
+              </p>
+            } @else {
+              @for (al of evaluacionDetalle()!.alertas; track $index) {
+                <div class="p-3.5 rounded-xl border text-xs flex flex-col gap-1.5" [ngClass]="getClaseSeveridadCard(al.severidad)">
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold">{{ al.medicamento_1_nombre }} + {{ al.medicamento_2_nombre }}</span>
+                    <span class="px-2 py-0.5 rounded text-[10px] font-bold" [ngClass]="getClaseSeveridadBadge(al.severidad)">
+                      {{ al.severidad }}
+                    </span>
+                  </div>
+                  <p class="font-semibold">{{ al.mensaje_alerta }}</p>
+                  <p class="opacity-80">{{ al.pauta_precaucion }}</p>
+                </div>
+              }
+            }
+          </div>
+
+          <!-- Sugerencias -->
+          @if (evaluacionDetalle()!.recomendaciones.length > 0) {
+            <div class="flex flex-col gap-3">
+              <h3 class="text-sm font-bold text-primary">Sugerencias Registradas</h3>
+              @for (rc of evaluacionDetalle()!.recomendaciones; track $index) {
+                <div class="p-3 rounded-xl bg-surface-container-low border border-outline-variant/30 text-xs flex flex-col gap-1">
+                  <span class="font-bold text-primary">{{ rc.titulo }}</span>
+                  <p class="text-on-surface-variant">{{ rc.detalle }}</p>
+                </div>
+              }
+            </div>
+          }
+
+          <!-- Aviso legal RF-25 -->
+          <div class="p-3 rounded-xl bg-surface-container-low text-[11px] text-on-surface-variant">
+            {{ evaluacionDetalle()?.aviso_legal }}
+          </div>
+        </div>
+      }
+
+      <div class="flex justify-end pt-2 border-t border-outline-variant/30">
+        <button
+          type="button"
+          (click)="cerrarModalDetalle()"
+          class="px-5 py-2 rounded-xl bg-surface-container-low hover:bg-surface-variant text-primary font-bold text-xs transition cursor-pointer"
+        >
+          Cerrar
+        </button>
+      </div>
+    </div>
+  </div>
+}

@@ -52,6 +52,16 @@ export class Header {
     return this.router.url.startsWith('/recetas');
   }
 
+  isTratamientosRoute(): boolean {
+    return this.router.url.startsWith('/tratamientos');
+  }
+
+  canSeeTratamientos(): boolean {
+    if (!this.authService.isAuthenticated()) return false;
+    const role = this.authService.userRole();
+    return role === 'doctor' || role === 'paciente';
+  }
+
   isProductsRoute(): boolean {
     return this.router.url.startsWith('/medicamentos');
   }
@@ -62,6 +72,11 @@ export class Header {
 
   isMisCitasRoute(): boolean {
     return this.router.url.startsWith('/mis-citas') || (this.authService.isPaciente() && this.router.url.startsWith('/citas'));
+  }
+
+  // CU19: pagos y comprobantes del paciente.
+  isPagosRoute(): boolean {
+    return this.router.url.startsWith('/pagos');
   }
 
   // Entrada "Teleconsulta" (CU15): Solo visible para ADMIN. 
@@ -147,13 +162,22 @@ export class Header {
       this.router.navigate(['/mis-citas']);
       return;
     }
+    // El Super Admin no tiene perfil profesional: su panel canónico es CU30.
+    if (this.tenantService.isSuperAdmin()) {
+      this.router.navigate(['/admin/tenants']);
+      return;
+    }
     // Recepción no tiene vista de perfil: va a su panel (agenda)
     if (this.authService.isRecepcion()) {
       this.router.navigate(['/admin/agenda']);
       return;
     }
-    // Perfil profesional del médico autenticado (CU04)
-    this.router.navigate(['/mi-perfil-medico']);
+    if (this.authService.isDoctor()) {
+      // Perfil profesional del médico autenticado (CU04)
+      this.router.navigate(['/mi-perfil-medico']);
+      return;
+    }
+    this.router.navigate(['/admin/dashboard']);
   }
 
   goToMedicos(): void {
@@ -185,7 +209,8 @@ export class Header {
     this.closeDropdown();
     this.closeMobileMenu();
     if (this.tenantService.isSuperAdmin()) {
-      this.router.navigate(['/admin/clinicas']);
+      // Backoffice global canónico de CU30 (no la gestión legacy de clínicas).
+      this.router.navigate(['/admin/tenants']);
     } else {
       this.router.navigate(['/admin/dashboard']);
     }
