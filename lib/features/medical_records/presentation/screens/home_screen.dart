@@ -290,6 +290,13 @@ class HomeScreen extends StatelessWidget {
                     onTap: () => Navigator.of(context).pushNamed('/recetas'),
                   ),
                   _buildServiceCard(
+                    icon: Icons.psychology_outlined,
+                    title: 'Asistencia IA',
+                    subtitle: 'Alertas y sugerencias de tratamiento',
+                    color: const Color(0xFF0284C7),
+                    onTap: () => Navigator.of(context).pushNamed('/ai-assistant'),
+                  ),
+                  _buildServiceCard(
                     icon: Icons.healing_rounded,
                     title: 'Mis Tratamientos',
                     subtitle: 'Planes médicos y tomas CU17',

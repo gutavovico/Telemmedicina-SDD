@@ -4,6 +4,7 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:provider/provider.dart';
 import 'core/theme/app_theme.dart';
+import 'features/ai_assistant/presentation/providers/asistencia_provider.dart';
 import 'core/notifications/push_service.dart';
 import 'features/ai_assistant/presentation/screens/ai_assistant_screen.dart';
 import 'features/analytics/reportes/presentation/screens/reports_screen.dart';
@@ -103,6 +104,7 @@ class TelemedicinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ColaProvider()),
         ChangeNotifierProvider(create: (_) => FichaProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalDocumentsProvider()),
+        ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
         // CU19: pagos en línea y comprobantes digitales.
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
         // CU16: el provider emite `sessionExpired` una sola vez por ciclo ante 401.
@@ -270,7 +272,7 @@ class TelemedicinaApp extends StatelessWidget {
           '/teleconsulta/videollamada': (context) =>
               const VideollamadaMovilScreen(),
           '/analytics': (context) => const ReportsScreen(),
-          '/ai-assistant': (context) => const AiAssistantScreen(),
+          '/ai-assistant': (context) => const PatientOnlyRoute(child: AiAssistantScreen()),
         },
       ),
     );

@@ -53,10 +53,21 @@ class ApiConfig {
       '$baseUrl/api/v1/documentos/$id/download';
   static String documentFileUrl(int id) => '$baseUrl/api/v1/documentos/$id/file';
 
+  // Resultados de Laboratorio (Medical Records - CU11, solo lectura)
+  static String get myLabResultsUrl => '$baseUrl/api/v1/resultados-laboratorio/me';
+  static String labResultFileUrl(int id) =>
+      '$baseUrl/api/v1/resultados-laboratorio/$id/archivo';
+
   // Recetas Médicas Digitales (Medical Records - CU16, solo lectura paciente)
   static String get prescriptionsUrl => '$baseUrl/api/v1/recetas';
   static String prescriptionDetailUrl(int id) => '$baseUrl/api/v1/recetas/$id';
   static String prescriptionPdfUrl(int id) => '$baseUrl/api/v1/recetas/$id/pdf';
+
+  // Asistencia Inteligente de Tratamiento (CU18)
+  static String get assistanceEvaluateUrl => '$baseUrl/api/v1/asistencia-tratamiento/evaluar';
+  static String get assistanceHistoryUrl => '$baseUrl/api/v1/asistencia-tratamiento/historial';
+  static String assistanceDetailUrl(int id) => '$baseUrl/api/v1/asistencia-tratamiento/evaluaciones/$id';
+  static String get assistanceCatalogUrl => '$baseUrl/api/v1/asistencia-tratamiento/interacciones/catalogo';
 
   // Teleconsulta y Chat de Cita Médica (CU15)
   static String teleconsultaUrl(int idCita) =>
