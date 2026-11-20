@@ -888,7 +888,9 @@ def emitir_receta_teleconsulta(
                     id_consulta=consulta.id_consulta,
                     codigo_cie=cod,
                     descripcion=desc,
-                    tipo="PRINCIPAL" if es_princ else "SECUNDARIO",
+                    # Valores válidos de TipoDiagnosticoEnum (HCE); "PRINCIPAL"/"SECUNDARIO"
+                    # rompían la serialización de GET /api/v1/hce/pacientes/{id} (500).
+                    tipo="DEFINITIVO" if es_princ else "PRESUNTIVO",
                 )
             )
         db.commit()

@@ -31,6 +31,8 @@ from app.modules.backup.router import router as backup_router
 from app.modules.backup import scheduler as backup_scheduler
 from app.modules.auth.planes.router import router as planes_router, plan_error_handler
 from app.modules.auth.planes.service import PlanError
+from app.modules.ai_assistant.router import router as ai_assistant_router, assistance_error_handler
+from app.modules.ai_assistant.service import AssistanceError
 from app.modules.tenants.usage_billing.router import (
     router as billing_overages_router, billing_error_handler, billing_http_exception_handler,
 )
@@ -40,7 +42,7 @@ from app.modules.tenants.usage_billing.service import BillingError, BillingHttpE
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Inicialización de servicios: validación criptográfica CU16 y scheduler de backups."""
+    """InicializaciÃ³n de servicios: validaciÃ³n criptogrÃ¡fica CU16 y scheduler de backups."""
     import logging
 
     _log = logging.getLogger(__name__)
@@ -77,7 +79,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Configuración de CORS - permite cualquier origen (JWT Bearer tokens, no cookies)
+# ConfiguraciÃ³n de CORS - permite cualquier origen (JWT Bearer tokens, no cookies)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origins_list,
@@ -91,7 +93,7 @@ app.add_middleware(
 
 @app.middleware("http")
 async def strip_backend_api_prefix(request: Request, call_next):
-    """Permite recibir peticiones a través del proxy local /backend-api/* desde celulares en red Wi-Fi."""
+    """Permite recibir peticiones a travÃ©s del proxy local /backend-api/* desde celulares en red Wi-Fi."""
     path = request.scope.get("path", "")
     if path == "/backend-api":
         request.scope["path"] = "/"
@@ -100,10 +102,10 @@ async def strip_backend_api_prefix(request: Request, call_next):
     return await call_next(request)
 
 
-# Registro de routers de módulos
+# Registro de routers de mÃ³dulos
 app.include_router(auth_router)
 
-# Contexto de Tenant y Clínicas (SaaS multitenant)
+# Contexto de Tenant y ClÃ­nicas (SaaS multitenant)
 app.include_router(clinicas_router)
 app.include_router(clinicas_router, prefix="/api/v1")
 app.include_router(tenant_management_router)
@@ -113,23 +115,26 @@ app.include_router(subscription_payments_router, prefix="/api/v1")
 app.include_router(public_onboarding_router)
 app.include_router(deactivation_requests_router)
 
-# Gestión de Usuarios, Roles y Auditoría
+# GestiÃ³n de Usuarios, Roles y AuditorÃ­a
 app.include_router(users_management_router)
 app.include_router(users_management_router, prefix="/auth")
+app.include_router(users_management_router, prefix="/api/v1")
 app.include_router(roles_permissions_router)
 app.include_router(roles_permissions_router, prefix="/auth")
+app.include_router(roles_permissions_router, prefix="/api/v1")
 app.include_router(audit_router)
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/auth")
 
-# Expediente clínico e Historias Clínicas (CU10, CU12, CU13, CU16, CU17, CU28)
+# Expediente clínico e Historias Clínicas (CU03, CU09, CU10, CU11, CU12, CU13, CU16, CU17, CU28)
 app.include_router(medical_records_router)
 
-# Citas, Agenda y Perfil Médico (CU04, CU05, CU08, CU25)
+# Citas, Agenda y Perfil MÃ©dico (CU04, CU05, CU08, CU25)
 app.include_router(appointments_router)
 
-# Reportes y exportación (CU22/CU27)
+# Reportes y exportaciÃ³n (CU22/CU27)
 app.include_router(analytics_router)
+app.include_router(analytics_router, prefix="/api/v1")
 
 # Teleconsulta y Chat en Tiempo Real (CU14, CU15)
 app.include_router(communications_router)
@@ -138,6 +143,7 @@ app.include_router(communications_router, prefix="/api/v1")
 # Respaldos de base de datos
 app.include_router(backup_router)
 app.include_router(planes_router)
+app.include_router(ai_assistant_router)
 app.add_exception_handler(PlanError, plan_error_handler)
 
 # CU36: consumo, liquidaciones inmutables y pagos Stripe test independientes.
@@ -149,15 +155,17 @@ app.add_exception_handler(BillingHttpException, billing_http_exception_handler)
 app.include_router(payments_router)
 app.include_router(payments_router, prefix="/api/v1")
 
-# Notificaciones push del móvil (CU19)
+# Notificaciones push del mÃ³vil (CU19)
 app.include_router(notificaciones_router)
 app.include_router(notificaciones_router, prefix="/api/v1")
 
 # CU16: formato de error uniforme {"detail", "code"}
 app.add_exception_handler(PrescriptionError, prescription_error_handler)
 app.add_exception_handler(TreatmentError, treatment_error_handler)
-# CU19: errores de negocio de pagos con su código HTTP.
+app.add_exception_handler(AssistanceError, assistance_error_handler)
+# CU19: errores de negocio de pagos con su cÃ³digo HTTP.
 app.add_exception_handler(PagoError, pago_error_handler)
+
 
 
 @app.get("/", tags=["General"], summary="Health Check")
@@ -173,7 +181,7 @@ def health_check():
 @app.post(
     "/",
     tags=["Pagos"],
-    summary="Dispatcher del webhook Stripe configurado en la raíz",
+    summary="Dispatcher del webhook Stripe configurado en la raÃ­z",
 )
 async def stripe_webhook_dispatcher(
     request: Request,
@@ -182,8 +190,8 @@ async def stripe_webhook_dispatcher(
     """Despacha un evento Stripe entre pagos CU19 y suscripciones CU31.
 
     Stripe permite una sola URL por endpoint. El endpoint configurado en el
-    panel de Stripe es la raíz del backend, por lo que los metadatos de la
-    sesión permiten seleccionar el flujo sin duplicar secretos de webhook.
+    panel de Stripe es la raÃ­z del backend, por lo que los metadatos de la
+    sesiÃ³n permiten seleccionar el flujo sin duplicar secretos de webhook.
     """
     payload = await request.body()
     signature = request.headers.get("Stripe-Signature", "")
