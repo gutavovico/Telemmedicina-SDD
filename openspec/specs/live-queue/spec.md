@@ -1,6 +1,13 @@
-# Especificación Formal: CU08 Consultar y Actualizar Tiempos de Espera — Live Queue
+# Live Queue
 
-## 1. Requisitos del Sistema (RFC 2119)
+## Purpose
+
+Especificación Formal: CU08 Consultar y Actualizar Tiempos de Espera — Live Queue
+
+## Requirements
+### Requirement: El sistema SHALL exponer la fila virtual y los tiempos de espera
+El sistema SHALL cumplir las reglas numeradas a continuación (en RFC 2119, **DEBE** equivale a SHALL y **NO DEBEN** a SHALL NOT).
+
 
 1. El sistema **DEBE** exponer la fila virtual del día por médico derivada de `citas` con `fecha_cita` igual a la fecha solicitada (por defecto hoy, zona UTC-4) y `estado` en (`PENDIENTE`, `CONFIRMADA`, `EN_CURSO`), ordenadas por `hora_inicio` e `id_cita`. Las citas `CANCELADA`, `COMPLETADA`, `ATENDIDA` o `PERDIDA` **NO DEBEN** aparecer en la fila.
 2. El paciente autenticado **DEBE** poder consultar `GET /api/v1/cola/mi-turno` y recibir su posición (1 = siendo atendido/siguiente), su ETA en minutos, cuántas citas tiene por delante, el estado de la cola y el nombre del médico, sin recibir datos de ningún otro paciente. Sin cita pendiente hoy, el sistema **DEBE** responder `estado_cola = SIN_TURNOS` y `posicion = 0`.
@@ -16,7 +23,7 @@
 
 ---
 
-## 2. Criterios de Aceptación (Gherkin)
+#### Scenario: Criterios de aceptación (Gherkin)
 
 ```gherkin
 Característica: Fila virtual y tiempos de espera (CU08)

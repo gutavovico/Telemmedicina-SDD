@@ -80,3 +80,12 @@ Decisión del usuario de 2026-11-03, aplicable exclusivamente al catálogo CU34:
 - Solo BOB con dos decimales y ciclo MENSUAL. Esta decisión posterior prevalece sobre las alternativas anual/mensual del documento funcional.
 - CU34 no crea suscripciones, no cobra ni renueva. Los consumidores futuros referenciarán una versión concreta.
 - Las reglas de aislamiento, permisos y sesiones de los demás módulos permanecen vigentes.
+
+### Excepción acotada — CU11 (sesión síncrona)
+
+Decisión del usuario de 2026-11-18, aplicable exclusivamente a los módulos de resultados y de sincronización de laboratorio de CU11 (`app/modules/medical_records/laboratory_results/` y `app/modules/medical_records/laboratory_sync/`):
+- Usan `Session` síncrona con la dependencia `get_db` existente, igual que CU10, CU12 y el resto de módulos actuales del backend. Motivo: hoy no existe infraestructura asíncrona; `get_db`, `get_current_user` y los módulos vecinos son síncronos, y crearla afectaría a toda la aplicación.
+- Siguen vigentes `select/execute/scalars`, la prohibición de `session.query()`, el filtro de clínica en toda consulta y mutación, la prohibición de aceptar `tenant_id` o `id_clinica` del cliente, los códigos HTTP semánticos y el resto de las reglas de la sección 3.1.
+- Esta excepción NO se extiende a otros módulos ni a código nuevo fuera de CU11.
+- La migración a `AsyncSession` se hará de forma transversal en el futuro, para toda la aplicación a la vez.
+- Las reglas de aislamiento, permisos y sesiones de los demás módulos permanecen vigentes.
