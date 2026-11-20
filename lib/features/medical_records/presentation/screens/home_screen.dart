@@ -327,6 +327,13 @@ class HomeScreen extends StatelessWidget {
                   color: const Color(0xFF0D9488),
                   onTap: () => Navigator.of(context).pushNamed('/mi-cola'),
                 ),
+                _buildServiceCard(
+                  icon: Icons.schedule_rounded,
+                  title: 'Mi Lista de Espera',
+                  subtitle: 'Inscripción y reasignación CU07',
+                  color: const Color(0xFF049CAB),
+                  onTap: () => Navigator.of(context).pushNamed('/lista-espera'),
+                ),
                 if (isPatient)
                   _buildServiceCard(
                     icon: Icons.person_outline_rounded,
