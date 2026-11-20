@@ -65,6 +65,8 @@ class _WaitlistScreenState extends State<WaitlistScreen> {
       appBar: AppBar(title: const Text('Mi lista de espera')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _mostrarFormulario(context, provider),
+        backgroundColor: Theme.of(context).colorScheme.primary,
+        foregroundColor: Theme.of(context).colorScheme.onPrimary,
         icon: const Icon(Icons.add),
         label: const Text('Inscribirme'),
       ),
