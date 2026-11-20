@@ -1,0 +1,130 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-5xl space-y-6">
+    <nav aria-label="Ruta de navegación" class="flex items-center gap-2 text-sm">
+      <a routerLink="/admin/resultados-laboratorio/sincronizaciones" class="inline-flex items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1.5 font-medium text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+        Sincronizaciones
+      </a>
+    </nav>
+
+    <header class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm">
+      <h1 class="text-2xl font-bold text-[#293954]">Fuentes de laboratorio</h1>
+      <p class="text-sm text-gray-500">Laboratorios que entregan resultados por lote a su clínica. Una fuente inactiva no admite importaciones ni reintentos. Las fuentes no se eliminan.</p>
+    </header>
+
+    <div aria-live="polite" class="min-h-[1.25rem] space-y-2">
+      @if (exito(); as mensaje) {
+        <p class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800" role="status" data-testid="exito-fuente">{{ mensaje }}</p>
+      }
+      @if (errorActualizacion(); as mensaje) {
+        <p class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-actualizacion">{{ mensaje }}</p>
+      }
+    </div>
+
+    <section aria-labelledby="titulo-alta" class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm">
+      <h2 id="titulo-alta" class="mb-4 text-lg font-semibold text-[#293954]">Nueva fuente</h2>
+      <form [formGroup]="formulario" (ngSubmit)="crear()" novalidate class="grid grid-cols-1 gap-4 md:grid-cols-5">
+        <div class="md:col-span-2">
+          <label for="fuente-codigo" class="mb-1 block text-sm font-medium text-[#293954]">Código</label>
+          <input id="fuente-codigo" type="text" formControlName="codigo" maxlength="50" autocomplete="off" placeholder="Ej.: LAB-CENTRAL"
+            [attr.aria-invalid]="errorDe('codigo') ? 'true' : null" [attr.aria-describedby]="'ayuda-codigo' + (errorDe('codigo') ? ' error-codigo' : '')"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm uppercase focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+          <p id="ayuda-codigo" class="mt-1 text-xs text-gray-500">2 a 50 caracteres: letras, dígitos, guion y guion bajo. Se guarda en mayúsculas.</p>
+          <p id="error-codigo" class="mt-1 min-h-[1rem] text-xs text-rose-700" role="alert" data-testid="error-codigo">{{ errorDe('codigo') }}</p>
+        </div>
+        <div class="md:col-span-2">
+          <label for="fuente-nombre" class="mb-1 block text-sm font-medium text-[#293954]">Nombre</label>
+          <input id="fuente-nombre" type="text" formControlName="nombre" maxlength="200" autocomplete="off" placeholder="Ej.: Laboratorio Central S.R.L."
+            [attr.aria-invalid]="errorDe('nombre') ? 'true' : null" [attr.aria-describedby]="errorDe('nombre') ? 'error-nombre' : null"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+          <p id="error-nombre" class="mt-1 min-h-[1rem] text-xs text-rose-700" role="alert" data-testid="error-nombre">{{ errorDe('nombre') }}</p>
+        </div>
+        <div class="flex items-start pt-6">
+          <button type="submit" [disabled]="creando()" data-testid="btn-crear-fuente"
+            class="w-full rounded-xl bg-[#049CAB] px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+            {{ creando() ? 'Creando…' : 'Crear fuente' }}
+          </button>
+        </div>
+      </form>
+      <div aria-live="assertive">
+        @if (errorCreacion(); as mensaje) {
+          <p class="mt-3 rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert" data-testid="error-creacion">{{ mensaje }}</p>
+        }
+      </div>
+    </section>
+
+    <section class="overflow-hidden rounded-2xl border border-[#E8EDF4] bg-white shadow-sm" [attr.aria-busy]="cargando()">
+      <div class="flex items-center justify-between gap-3 border-b border-[#E8EDF4] px-4 py-3">
+        <h2 class="text-lg font-semibold text-[#293954]">Fuentes registradas</h2>
+        <div class="flex items-center gap-2">
+          <label for="filtro-activa" class="text-sm text-gray-600">Mostrar</label>
+          <select id="filtro-activa" [formControl]="filtroActiva"
+            class="rounded-xl border border-[#D5DDE8] px-3 py-2 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]">
+            <option value="">Todas</option>
+            <option value="SI">Activas</option>
+            <option value="NO">Inactivas</option>
+          </select>
+        </div>
+      </div>
+
+      @if (error(); as mensaje) {
+        <div class="flex items-center justify-between border-b border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-listado">
+          <span>{{ mensaje }}</span>
+          <button type="button" (click)="cargar(pagina())" class="underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">Reintentar</button>
+        </div>
+      }
+      @if (cargando()) {
+        <p class="p-8 text-center text-sm text-gray-500" role="status" data-testid="cargando">Cargando fuentes…</p>
+      } @else if (items().length === 0 && !error()) {
+        <div class="p-10 text-center" data-testid="vacio">
+          <span class="material-symbols-outlined text-[40px] text-gray-300" aria-hidden="true">lan</span>
+          <p class="mt-2 text-sm text-gray-500">Aún no hay fuentes de laboratorio. Cree la primera con el formulario de arriba.</p>
+        </div>
+      } @else if (items().length > 0) {
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-[#E8EDF4] text-sm">
+            <caption class="sr-only">Fuentes de laboratorio de la clínica</caption>
+            <thead class="bg-[#F7F9FC] text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr>
+                <th scope="col" class="px-4 py-3">Código</th>
+                <th scope="col" class="px-4 py-3">Nombre</th>
+                <th scope="col" class="px-4 py-3">Estado</th>
+                <th scope="col" class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#E8EDF4]">
+              @for (f of items(); track f.id_fuente) {
+                <tr data-testid="fila-fuente">
+                  <td class="whitespace-nowrap px-4 py-3 font-semibold text-[#293954]" data-testid="fuente-codigo">{{ f.codigo }}</td>
+                  <td class="px-4 py-3 text-[#293954]">{{ f.nombre }}</td>
+                  <td class="px-4 py-3">
+                    <span class="inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs font-semibold"
+                      [class]="f.activa === 'SI' ? 'border-emerald-200 bg-emerald-50 text-emerald-800' : 'border-gray-300 bg-gray-100 text-gray-700'"
+                      data-testid="fuente-estado">
+                      <span class="material-symbols-outlined text-[14px]" aria-hidden="true">{{ f.activa === 'SI' ? 'check_circle' : 'pause_circle' }}</span>
+                      {{ f.activa === 'SI' ? 'Activa' : 'Inactiva' }}
+                    </span>
+                  </td>
+                  <td class="px-4 py-3 text-right">
+                    <button type="button" (click)="alternar(f)" [disabled]="actualizando() !== null" data-testid="btn-alternar"
+                      class="rounded-lg border border-[#D5DDE8] px-3 py-1.5 text-xs font-semibold text-[#293954] disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]"
+                      [attr.aria-label]="(f.activa === 'SI' ? 'Desactivar' : 'Activar') + ' la fuente ' + f.codigo">
+                      {{ f.activa === 'SI' ? 'Desactivar' : 'Activar' }}
+                    </button>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <nav aria-label="Paginación" class="flex items-center justify-between border-t border-[#E8EDF4] px-4 py-3 text-sm text-gray-600">
+          <span>{{ total() }} fuente(s) · página {{ pagina() }} de {{ totalPaginas() }}</span>
+          <span class="flex gap-2">
+            <button type="button" [disabled]="pagina() <= 1" (click)="cargar(pagina() - 1)" class="rounded-lg border border-[#D5DDE8] px-3 py-1.5 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Anterior</button>
+            <button type="button" [disabled]="pagina() >= totalPaginas()" (click)="cargar(pagina() + 1)" class="rounded-lg border border-[#D5DDE8] px-3 py-1.5 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Siguiente</button>
+          </span>
+        </nav>
+      }
+    </section>
+  </div>
+</main>

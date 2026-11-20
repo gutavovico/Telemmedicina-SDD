@@ -1,0 +1,145 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-4xl space-y-6">
+    <nav aria-label="Ruta de navegación" class="flex items-center gap-2 text-sm">
+      <a routerLink="/admin/resultados-laboratorio/sincronizaciones" class="inline-flex items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1.5 font-medium text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+        Sincronizaciones
+      </a>
+    </nav>
+
+    <header class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm">
+      <h1 class="text-2xl font-bold text-[#293954]">Importar lote de resultados</h1>
+      <p class="text-sm text-gray-500">Hasta 50 resultados por lote, con un manifiesto JSON y los archivos PDF, JPG o PNG (máximo 10 MB cada uno y 100 MB en total). Reenviar un lote es seguro: lo ya integrado queda como duplicado.</p>
+    </header>
+
+    <form (submit)="$event.preventDefault(); enviar()" novalidate class="space-y-6 rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm" [attr.aria-busy]="enviando()">
+      <!-- Fuente -->
+      <div>
+        <label for="fuente" class="mb-1 block text-sm font-medium text-[#293954]">Fuente de laboratorio</label>
+        <select id="fuente" #selectorFuente (change)="alElegirFuente(selectorFuente.value)" [disabled]="enviando() || cargandoFuentes()"
+          [attr.aria-describedby]="'ayuda-fuente'"
+          class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB] disabled:opacity-60">
+          <option value="" [selected]="idFuente() === null">Seleccione una fuente…</option>
+          @for (f of fuentes(); track f.id_fuente) {
+            <option [value]="f.id_fuente" [selected]="f.id_fuente === idFuente()">{{ f.codigo }} — {{ f.nombre }}</option>
+          }
+        </select>
+        <p id="ayuda-fuente" class="mt-1 text-xs text-gray-500">Solo se listan las fuentes activas de su clínica.</p>
+        @if (cargandoFuentes()) {
+          <p class="mt-1 text-xs text-gray-500" role="status" data-testid="cargando-fuentes">Cargando fuentes…</p>
+        }
+        @if (errorFuentes(); as mensaje) {
+          <p class="mt-1 text-sm text-rose-700" role="alert" data-testid="error-fuentes">{{ mensaje }}</p>
+        }
+        @if (!cargandoFuentes() && !errorFuentes() && fuentes().length === 0) {
+          <p class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" data-testid="sin-fuentes">
+            No hay fuentes activas. <a routerLink="/admin/resultados-laboratorio/fuentes" class="font-semibold underline">Cree o active una fuente</a> para importar.
+          </p>
+        }
+      </div>
+
+      <!-- Manifiesto -->
+      <fieldset class="space-y-3">
+        <legend class="text-sm font-medium text-[#293954]">Manifiesto (JSON)</legend>
+        <div>
+          <label for="manifiesto-archivo" class="mb-1 block text-sm text-gray-600">Cargar un archivo .json</label>
+          <input id="manifiesto-archivo" #entradaManifiesto type="file" accept=".json,application/json" [disabled]="enviando()"
+            (change)="alElegirArchivoManifiesto(entradaManifiesto)"
+            class="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-[#049CAB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" />
+          @if (nombreManifiesto(); as nombre) {
+            <p class="mt-1 text-xs text-gray-500" data-testid="nombre-manifiesto">Manifiesto cargado desde «{{ nombre }}».</p>
+          }
+        </div>
+        <div>
+          <label for="manifiesto-texto" class="mb-1 block text-sm text-gray-600">…o pegue el contenido</label>
+          <textarea id="manifiesto-texto" #areaManifiesto rows="8" spellcheck="false" [value]="textoManifiesto()" [disabled]="enviando()"
+            (input)="alEscribirManifiesto(areaManifiesto.value)" aria-describedby="ayuda-manifiesto"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB] disabled:opacity-60"></textarea>
+          <p id="ayuda-manifiesto" class="mt-1 text-xs text-gray-500">«fuente» se toma de la fuente seleccionada. No incluya «id_clinica» ni «tenant_id».</p>
+        </div>
+        <details class="rounded-xl border border-[#E8EDF4] bg-[#F7F9FC] p-3 text-sm">
+          <summary class="cursor-pointer font-medium text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Ver ejemplo de manifiesto</summary>
+          <pre class="mt-2 overflow-x-auto text-xs text-gray-700" data-testid="ejemplo-manifiesto">{{ ejemplo }}</pre>
+        </details>
+      </fieldset>
+
+      <!-- Archivos -->
+      <div>
+        <label for="archivos" class="mb-1 block text-sm font-medium text-[#293954]">Archivos de los resultados</label>
+        <input id="archivos" #entradaArchivos type="file" multiple [accept]="acceptArchivos" [disabled]="enviando()"
+          (change)="alElegirArchivos(entradaArchivos)" aria-describedby="ayuda-archivos"
+          class="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-[#049CAB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" />
+        <p id="ayuda-archivos" class="mt-1 text-xs text-gray-500">El nombre de cada archivo debe coincidir con «nombre_archivo» de su ítem. PDF, JPG o PNG.</p>
+        @if (archivos().length > 0) {
+          <div class="mt-3 rounded-xl border border-[#E8EDF4]">
+            <div class="flex items-center justify-between border-b border-[#E8EDF4] px-3 py-2 text-xs text-gray-600">
+              <span data-testid="resumen-archivos">{{ archivos().length }} archivo(s) · {{ formatearTamano(validacion().totalBytes) }}</span>
+              <button type="button" (click)="limpiarArchivos()" [disabled]="enviando()" class="underline disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Quitar todos</button>
+            </div>
+            <ul class="max-h-48 divide-y divide-[#E8EDF4] overflow-y-auto text-sm" data-testid="lista-archivos">
+              @for (a of archivos(); track $index) {
+                <li class="flex items-center justify-between gap-3 px-3 py-1.5">
+                  <span class="truncate text-[#293954]">{{ a.name }} <span class="text-xs text-gray-400">{{ formatearTamano(a.size) }}</span></span>
+                  <button type="button" (click)="quitarArchivo($index)" [disabled]="enviando()" [attr.aria-label]="'Quitar el archivo ' + a.name"
+                    class="rounded-md px-2 py-0.5 text-xs text-rose-700 hover:bg-rose-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">Quitar</button>
+                </li>
+              }
+            </ul>
+          </div>
+        }
+      </div>
+
+      <!-- Validación previa -->
+      <div aria-live="polite" class="space-y-2" data-testid="validacion">
+        @if (mostrarValidacion()) {
+          @if (validacion().errores.length > 0) {
+            <div class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" data-testid="errores-validacion">
+              <p class="font-semibold">Revise antes de enviar:</p>
+              <ul class="mt-1 list-disc space-y-0.5 pl-5">
+                @for (e of validacion().errores; track $index) {
+                  <li>{{ e }}</li>
+                }
+              </ul>
+            </div>
+          } @else {
+            <p class="rounded-xl border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800" data-testid="validacion-ok">
+              El lote es válido: {{ validacion().items }} ítem(s) y {{ archivos().length }} archivo(s).
+            </p>
+          }
+        }
+        @for (a of validacion().avisos; track $index) {
+          <p class="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800" data-testid="aviso-tamano">{{ a }}</p>
+        }
+      </div>
+
+      <!-- Progreso y errores del servidor -->
+      @if (enviando()) {
+        <div data-testid="progreso" aria-live="polite">
+          @if (progreso(); as p) {
+            <div class="mb-1 flex justify-between text-xs text-gray-600">
+              <span>{{ p.porcentaje !== null && p.porcentaje >= 100 ? 'Procesando en el servidor…' : 'Subiendo archivos…' }}</span>
+              <span>{{ p.porcentaje !== null ? p.porcentaje + ' %' : '' }}</span>
+            </div>
+            <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200" role="progressbar" aria-label="Progreso de la subida"
+              aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="p.porcentaje">
+              <div class="h-full bg-[#049CAB] transition-all" [style.width.%]="p.porcentaje ?? 5"></div>
+            </div>
+          }
+        </div>
+      }
+      <div aria-live="assertive">
+        @if (errorEnvio(); as mensaje) {
+          <p class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-envio">{{ mensaje }}</p>
+        }
+      </div>
+
+      <div class="flex justify-end gap-3">
+        <a routerLink="/admin/resultados-laboratorio/sincronizaciones" class="rounded-xl border border-[#D5DDE8] px-4 py-2.5 text-sm font-semibold text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Cancelar</a>
+        <button type="submit" [disabled]="enviando()" data-testid="btn-importar"
+          class="rounded-xl bg-[#049CAB] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+          {{ enviando() ? 'Importando…' : 'Importar lote' }}
+        </button>
+      </div>
+    </form>
+  </div>
+</main>
