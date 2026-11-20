@@ -14,6 +14,14 @@ from app.modules.medical_records.tratamientos.avisos_router import router as tra
 from app.modules.medical_records.tratamientos.router import router as tratamientos_router
 from app.modules.medical_records.triage.router import router as triage_router
 from app.modules.medical_records.laboratory_orders.router import router as laboratory_orders_router
+from app.modules.medical_records.laboratory_results.router import (
+    router as laboratory_results_router,
+    pacientes_router as laboratory_results_pacientes_router,
+)
+from app.modules.medical_records.laboratory_sync.router import (
+    fuentes_router as laboratory_sources_router,
+    sincronizaciones_router as laboratory_sync_router,
+)
 
 router = APIRouter()
 
@@ -45,3 +53,11 @@ router.include_router(triage_router)
 
 # CU10 - Emitir Solicitudes de Examenes de Laboratorio
 router.include_router(laboratory_orders_router)
+
+# CU11 - Cargar, sincronizar e integrar resultados de laboratorio (bloque A: carga manual y consulta)
+router.include_router(laboratory_results_router)
+router.include_router(laboratory_results_pacientes_router)
+
+# CU11 - Bloque B: fuentes de laboratorio y sincronización por lote
+router.include_router(laboratory_sources_router)
+router.include_router(laboratory_sync_router)

@@ -35,6 +35,10 @@ from app.modules.tenants.usage_billing.models import (  # noqa: F401
     CicloConsumo, FotografiaConsumo, AvisoConsumo, LiquidacionExcedente,
     RenglonLiquidacion, PagoExcedente, EventoStripeExcedente,
 )
+from app.modules.medical_records.laboratory_sync.models import (  # noqa: F401
+    FuenteLaboratorio, SincronizacionLaboratorio, SincronizacionLaboratorioItem,
+)
+from app.modules.medical_records.laboratory_results.models import ResultadoLaboratorio  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
