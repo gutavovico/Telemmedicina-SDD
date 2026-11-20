@@ -5,6 +5,7 @@ Los demás estados siguen sujetos a verificación de su intervalo.
 No se registran modelos ni se ejecuta DDL para citas. Los intervalos son [inicio, fin).
 """
 from datetime import date, datetime, time, timedelta, timezone
+import logging
 import unicodedata
 
 from fastapi import HTTPException
@@ -18,6 +19,8 @@ from app.modules.auth.models import Auditoria, Usuario
 from app.modules.communications.models import Notificacion
 from app.modules.medical_records.models import Paciente
 from .schemas import AccionBloqueoResponse, BloqueoCreate, BloqueoResponse, HorarioCreate
+
+logger = logging.getLogger(__name__)
 
 
 ACTIVOS = ("PENDIENTE", "APROBADO")
@@ -322,6 +325,18 @@ def cambiar_bloqueo(db, id_bloqueo, accion, user, tenant_id):
     bloqueo.estado = destino
     _auditar(db, user, tenant_id, bloqueo, accion.upper(), f"Bloqueo: {origen} -> {destino}")
     _guardar(db)
+
+    # CU07: al liberar un bloqueo se ofrece el inicio de la franja a la lista
+    # de espera. Best-effort: un fallo nunca revierte la liberación.
+    if accion == "liberar":
+        try:
+            from app.modules.appointments.lista_espera.service import reasignar_por_bloqueo
+
+            reasignar_por_bloqueo(db, bloqueo)
+        except Exception as exc:  # noqa: BLE001 - best effort deliberado
+            db.rollback()
+            logger.warning("CU07: no se pudo reasignar la franja liberada %s: %s", id_bloqueo, exc)
+
     return AccionBloqueoResponse(**BloqueoResponse.model_validate(bloqueo).model_dump(),
         citas_afectadas=[c["id_cita"] for c in afectadas], notificaciones_creadas=creadas, advertencias=advertencias)
 

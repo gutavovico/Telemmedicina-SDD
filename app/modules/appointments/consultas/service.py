@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import HTTPException, status
 from datetime import date, datetime, time
 from typing import List, Optional
@@ -15,6 +17,8 @@ from app.modules.appointments.consultas.schemas import (
 from app.modules.medical_records.models import Paciente
 from app.modules.auth.models import Clinica, Usuario
 from app.core.tenant_status import CANONICAL_SUSPENDED, canonical_tenant_status
+
+logger = logging.getLogger(__name__)
 
 HORARIOS_ESTANDAR = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
@@ -227,11 +231,27 @@ def listar_citas(
     )
 
 
+def _reasignar_lista_espera(db: Session, cita: Cita, origen: str) -> None:
+    """Hook CU07: intenta reasignar el cupo liberado sin afectar la operación.
+
+    Un fallo en la reasignación nunca revierte la cancelación o eliminación
+    que la originó. La sesión se restaura para no dejar una transacción sucia.
+    """
+    try:
+        from app.modules.appointments.lista_espera.service import reasignar_por_cancelacion
+
+        reasignar_por_cancelacion(db, cita)
+    except Exception as exc:  # noqa: BLE001 - best effort deliberado
+        db.rollback()
+        logger.warning("CU07: no se pudo reasignar el cupo (%s): %s", origen, exc)
+
+
 def actualizar_cita(db: Session, id_cita: int, datos: CitaUpdate) -> Optional[CitaResponse]:
     cita = db.query(Cita).filter(Cita.id_cita == id_cita).first()
     if not cita:
         return None
 
+    estado_anterior = (cita.estado or "").upper()
     update_dict = datos.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
         if value is not None:
@@ -254,6 +274,10 @@ def actualizar_cita(db: Session, id_cita: int, datos: CitaUpdate) -> Optional[Ci
 
     db.commit()
     db.refresh(cita)
+
+    if (cita.estado or "").upper() == "CANCELADA" and estado_anterior != "CANCELADA":
+        _reasignar_lista_espera(db, cita, "cancelacion")
+
     return formatear_cita_response(cita)
 
 
@@ -261,8 +285,36 @@ def eliminar_cita(db: Session, id_cita: int) -> bool:
     cita = db.query(Cita).filter(Cita.id_cita == id_cita).first()
     if not cita:
         return False
+    cupo = {
+        "id_clinica": cita.id_clinica,
+        "id_medico": cita.id_medico,
+        "id_especialidad": cita.id_especialidad,
+        "fecha_cita": cita.fecha_cita,
+        "hora_inicio": cita.hora_inicio,
+        "hora_fin": cita.hora_fin,
+        "id_servicio": cita.id_servicio,
+        "id_cita": cita.id_cita,
+    }
     db.delete(cita)
     db.commit()
+
+    try:
+        from app.modules.appointments.lista_espera.service import reasignar_turno_liberado
+
+        reasignar_turno_liberado(
+            db,
+            tenant_id=cupo["id_clinica"],
+            id_medico=cupo["id_medico"],
+            id_especialidad=cupo["id_especialidad"],
+            fecha=cupo["fecha_cita"],
+            hora_inicio=cupo["hora_inicio"],
+            hora_fin=cupo["hora_fin"],
+            id_servicio=cupo["id_servicio"],
+            origen="ELIMINACION",
+        )
+    except Exception as exc:  # noqa: BLE001 - best effort deliberado
+        db.rollback()
+        logger.warning("CU07: no se pudo reasignar el cupo eliminado %s: %s", cupo["id_cita"], exc)
     return True
 
 
