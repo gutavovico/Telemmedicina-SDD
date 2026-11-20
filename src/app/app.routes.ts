@@ -404,6 +404,89 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Detalle de Documento',
       },
 
+      // CU11: Resultados de Laboratorio (carga manual, consulta, revisión de pendientes). Rutas estáticas antes de ':id'.
+      {
+        path: 'resultados-laboratorio',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-list/laboratory-result-list'
+          ).then((m) => m.LaboratoryResultList),
+        title: 'Hospital San Juan de Dios - Resultados de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/nuevo',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:create'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-form/laboratory-result-form'
+          ).then((m) => m.LaboratoryResultForm),
+        title: 'Hospital San Juan de Dios - Cargar Resultado de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/revision',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:review'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-review/laboratory-result-review'
+          ).then((m) => m.LaboratoryResultReview),
+        title: 'Hospital San Juan de Dios - Revisión de Resultados Pendientes',
+      },
+      // CU11 (bloque B): fuentes, importación por lote, informe y reintento. Exigen lab_results:sync.
+      {
+        path: 'resultados-laboratorio/fuentes',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sources/laboratory-sources'
+          ).then((m) => m.LaboratorySources),
+        title: 'Hospital San Juan de Dios - Fuentes de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-list/laboratory-sync-list'
+          ).then((m) => m.LaboratorySyncList),
+        title: 'Hospital San Juan de Dios - Sincronizaciones de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/importar',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-import/laboratory-sync-import'
+          ).then((m) => m.LaboratorySyncImport),
+        title: 'Hospital San Juan de Dios - Importar Lote de Resultados',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-detail/laboratory-sync-detail'
+          ).then((m) => m.LaboratorySyncDetail),
+        title: 'Hospital San Juan de Dios - Informe de Sincronización',
+      },
+      {
+        path: 'resultados-laboratorio/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-detail/laboratory-result-detail'
+          ).then((m) => m.LaboratoryResultDetail),
+        title: 'Hospital San Juan de Dios - Detalle de Resultado de Laboratorio',
+      },
+
       {
         path: 'recetas/emitir',
         canActivate: [staffGuard, prescriptionAccessGuard],

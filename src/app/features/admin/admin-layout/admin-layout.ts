@@ -20,6 +20,11 @@ export class AdminLayout {
   readonly isSidebarOpen = signal(false);
   readonly isDropdownOpen = signal(false);
 
+  /** CU11: mismo criterio que `PermissionsService.hasPermission('lab_results:read')`, sin inyectar nada nuevo. */
+  puedeVerResultadosLaboratorio(): boolean {
+    return this.tenantService.isSuperAdmin() || this.tenantService.permisos().includes('lab_results:read');
+  }
+
   canSeeReports(): boolean {
     const user = this.authService.currentUser();
     return this.authService.isAuthenticated()
