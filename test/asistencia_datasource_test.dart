@@ -18,6 +18,7 @@ class FakeApiClient implements ApiClientInterface {
     String url, {
     bool includeAuth = true,
     String? authToken,
+    Map<String, String>? headers,
   }) async {
     lastGetUrl = url;
     return getResponse;
@@ -28,10 +29,30 @@ class FakeApiClient implements ApiClientInterface {
     String url, {
     dynamic body,
     bool includeAuth = true,
+    Map<String, String>? headers,
   }) async {
     lastPostUrl = url;
     lastPostBody = body;
     return postResponse;
+  }
+
+  @override
+  Future<dynamic> patch(
+    String url, {
+    dynamic body,
+    bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async {
+    throw UnimplementedError('patch no se usa en estas pruebas');
+  }
+
+  @override
+  Future<dynamic> delete(
+    String url, {
+    bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async {
+    throw UnimplementedError('delete no se usa en estas pruebas');
   }
 
   @override
