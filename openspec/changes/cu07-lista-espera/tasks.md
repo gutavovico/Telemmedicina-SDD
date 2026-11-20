@@ -50,5 +50,5 @@
 - [x] Build/typecheck web.
 - [x] Ajuste de `test_cu35_subscriptions` al nuevo head de Alembic (`cu07_lista_espera_026`).
 - [x] Corrección del gate de suscripciones CU35 para tolerar esquemas heredados/ligeros sin `tenant_subscriptions`, que rompían las fixtures de CU10.
-  - Nota: la suite completa de backend mantiene fallos preexistentes ajenos a CU07: concurrencia de CU17 y falta de `apscheduler` para el scheduler de CU35 y las pruebas de CU17.
+  - Nota: tras instalar `apscheduler` (ya declarado en `requirements.txt`), la suite completa queda en verde: 1077 passed, 35 skipped, 65 subtests passed.
 - [ ] Prueba E2E manual en APK (pendiente de entorno).
