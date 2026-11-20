@@ -118,13 +118,15 @@ app.include_router(deactivation_requests_router)
 # GestiÃ³n de Usuarios, Roles y AuditorÃ­a
 app.include_router(users_management_router)
 app.include_router(users_management_router, prefix="/auth")
+app.include_router(users_management_router, prefix="/api/v1")
 app.include_router(roles_permissions_router)
 app.include_router(roles_permissions_router, prefix="/auth")
+app.include_router(roles_permissions_router, prefix="/api/v1")
 app.include_router(audit_router)
 app.include_router(audit_router, prefix="/api/v1")
 app.include_router(audit_router, prefix="/auth")
 
-# Expediente clÃ­nico e Historias ClÃ­nicas (CU10, CU12, CU13, CU16, CU17, CU28)
+# Expediente clínico e Historias Clínicas (CU03, CU09, CU10, CU11, CU12, CU13, CU16, CU17, CU28)
 app.include_router(medical_records_router)
 
 # Citas, Agenda y Perfil MÃ©dico (CU04, CU05, CU08, CU25)
@@ -132,6 +134,7 @@ app.include_router(appointments_router)
 
 # Reportes y exportaciÃ³n (CU22/CU27)
 app.include_router(analytics_router)
+app.include_router(analytics_router, prefix="/api/v1")
 
 # Teleconsulta y Chat en Tiempo Real (CU14, CU15)
 app.include_router(communications_router)
@@ -162,6 +165,7 @@ app.add_exception_handler(TreatmentError, treatment_error_handler)
 app.add_exception_handler(AssistanceError, assistance_error_handler)
 # CU19: errores de negocio de pagos con su cÃ³digo HTTP.
 app.add_exception_handler(PagoError, pago_error_handler)
+
 
 
 @app.get("/", tags=["General"], summary="Health Check")

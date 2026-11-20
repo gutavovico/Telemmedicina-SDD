@@ -91,6 +91,13 @@ class Rol(Base):
         return f"<Rol(id={self.id_rol}, nombre='{self.nombre}', estado='{self.estado}')>"
 
 
+class RolStr(str):
+    """String que soporta acceso dual a .nombre para evitar desincronizaciones."""
+    @property
+    def nombre(self) -> str:
+        return str(self)
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
     id_usuario = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True, index=True)
@@ -115,7 +122,15 @@ class Usuario(Base):
 
     @property
     def rol(self):
-        return self.rol_rel.nombre if self.rol_rel else None
+        """Nombre del rol (ADMIN, MEDICO, RECEPCION, PACIENTE).
+
+        Lo consumen los guards por rol del frontend Angular y Flutter, que de otro
+        modo recibirian `rol` siempre nulo y negarian el acceso.
+        """
+        if self.rol_rel and self.rol_rel.nombre:
+            return RolStr(self.rol_rel.nombre)
+        return None
+
 
     @property
     def tenant_id(self):

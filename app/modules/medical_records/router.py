@@ -50,6 +50,7 @@ router.include_router(tratamientos_router)
 
 # CU13: Triaje Preliminar AI
 router.include_router(triage_router)
+router.include_router(triage_router, prefix="/api/v1")
 
 # CU10 - Emitir Solicitudes de Examenes de Laboratorio
 router.include_router(laboratory_orders_router)
@@ -57,6 +58,8 @@ router.include_router(laboratory_orders_router)
 # CU11 - Cargar, sincronizar e integrar resultados de laboratorio (bloque A: carga manual y consulta)
 router.include_router(laboratory_results_router)
 router.include_router(laboratory_results_pacientes_router)
+router.include_router(fichas_router, prefix="/api/v1/fichas", include_in_schema=False)
+
 
 # CU11 - Bloque B: fuentes de laboratorio y sincronización por lote
 router.include_router(laboratory_sources_router)
