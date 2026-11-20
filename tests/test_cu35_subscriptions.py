@@ -309,6 +309,19 @@ def test_scheduler_is_explicitly_opt_in_and_registered_without_starting_it(env):
         worker.stop();scheduler.shutdown.assert_called_once_with(wait=False)
 
 
+def test_clinical_access_tolerates_legacy_schema_without_subscription_tables():
+    """CU10 y otros modulos con fixtures ligeras no deben romper por el gate CU35."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.modules.tenants.subscription_changes.access import assert_clinical_access
+    engine=create_engine('sqlite://')
+    db=sessionmaker(bind=engine)()
+    try:
+        assert assert_clinical_access(db,1) is None
+    finally:
+        db.close();engine.dispose()
+
+
 def test_real_auth_blocks_only_cancelled_tenant_clinical_access_at_boundary(env,monkeypatch):
     from datetime import date
     from app.core.security import hash_password
