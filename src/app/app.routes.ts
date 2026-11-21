@@ -1,9 +1,11 @@
+import { clinicAdminGuard } from './core/guards/clinic-admin.guard';
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { panelGuard, adminOnlyGuard, staffGuard } from './core/guards/panel-access.guard';
 import { tenantGuard } from './core/guards/tenant.guard';
 import { clinicaGuard } from './core/guards/clinica.guard';
 import { superAdminGuard } from './core/guards/super-admin.guard';
+import { permissionsGuard } from './core/guards/permissions.guard';
 import { prescriptionAccessGuard } from './features/medical-records/prescriptions/guards/prescription-access.guard';
 import { treatmentAccessGuard } from './features/medical-records/treatments/guards/treatment-access.guard';
 import { reportsAccessGuard } from './features/analytics/reportes/guards/reports-access.guard';
@@ -107,6 +109,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/admin/admin-layout/admin-layout').then((m) => m.AdminLayout),
     children: [
+      {
+        path: 'configuracion-entidad', canActivate: [adminOnlyGuard, clinicAdminGuard],
+        loadComponent: () => import('./features/tenants/entity-configuration/entity-configuration').then(m => m.EntityConfiguration),
+      },
       {
         path: '',
         redirectTo: 'dashboard',
@@ -327,6 +333,16 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Fila Virtual del Día',
       },
       {
+        path: 'lista-espera',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['waitlist:read'] },
+        loadComponent: () =>
+          import('./features/appointments/waitlist/gestion-lista-espera/gestion-lista-espera').then(
+            (m) => m.GestionListaEspera,
+          ),
+        title: 'Hospital San Juan de Dios - Lista de Espera',
+      },
+      {
         path: 'fichas',
         canActivate: [staffGuard],
         loadComponent: () =>
@@ -410,6 +426,89 @@ export const routes: Routes = [
             (m) => m.DocumentDetail,
           ),
         title: 'Hospital San Juan de Dios - Detalle de Documento',
+      },
+
+      // CU11: Resultados de Laboratorio (carga manual, consulta, revisión de pendientes). Rutas estáticas antes de ':id'.
+      {
+        path: 'resultados-laboratorio',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-list/laboratory-result-list'
+          ).then((m) => m.LaboratoryResultList),
+        title: 'Hospital San Juan de Dios - Resultados de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/nuevo',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:create'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-form/laboratory-result-form'
+          ).then((m) => m.LaboratoryResultForm),
+        title: 'Hospital San Juan de Dios - Cargar Resultado de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/revision',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:review'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-review/laboratory-result-review'
+          ).then((m) => m.LaboratoryResultReview),
+        title: 'Hospital San Juan de Dios - Revisión de Resultados Pendientes',
+      },
+      // CU11 (bloque B): fuentes, importación por lote, informe y reintento. Exigen lab_results:sync.
+      {
+        path: 'resultados-laboratorio/fuentes',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sources/laboratory-sources'
+          ).then((m) => m.LaboratorySources),
+        title: 'Hospital San Juan de Dios - Fuentes de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-list/laboratory-sync-list'
+          ).then((m) => m.LaboratorySyncList),
+        title: 'Hospital San Juan de Dios - Sincronizaciones de Laboratorio',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/importar',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-import/laboratory-sync-import'
+          ).then((m) => m.LaboratorySyncImport),
+        title: 'Hospital San Juan de Dios - Importar Lote de Resultados',
+      },
+      {
+        path: 'resultados-laboratorio/sincronizaciones/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:sync'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-sync-detail/laboratory-sync-detail'
+          ).then((m) => m.LaboratorySyncDetail),
+        title: 'Hospital San Juan de Dios - Informe de Sincronización',
+      },
+      {
+        path: 'resultados-laboratorio/:id',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['lab_results:read'] },
+        loadComponent: () =>
+          import(
+            './features/medical-records/documentos/resultados-laboratorio/components/laboratory-result-detail/laboratory-result-detail'
+          ).then((m) => m.LaboratoryResultDetail),
+        title: 'Hospital San Juan de Dios - Detalle de Resultado de Laboratorio',
       },
 
       {
@@ -708,6 +807,16 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/appointments/live-queue/mi-cola/mi-cola').then((m) => m.MiCola),
     title: 'Hospital San Juan de Dios - Mi Turno en Fila',
+  },
+  {
+    path: 'mi-lista-espera',
+    canActivate: [authGuard, permissionsGuard],
+    data: { permissions: ['waitlist:read'] },
+    loadComponent: () =>
+      import('./features/appointments/waitlist/mi-lista-espera/mi-lista-espera').then(
+        (m) => m.MiListaEspera,
+      ),
+    title: 'Hospital San Juan de Dios - Mi Lista de Espera',
   },
   {
     path: 'especialistas',
@@ -1034,7 +1143,8 @@ export const routes: Routes = [
   },
   {
     path: 'ia-asistente',
-    canActivate: [authGuard],
+    canActivate: [authGuard, permissionsGuard],
+    data: { permissions: ['assistance:evaluate', 'assistance:read'] },
     loadComponent: () => import('./features/ai-assistant/ai-assistant').then((m) => m.AiAssistant),
     title: 'Hospital San Juan de Dios - Asistente IA',
   },

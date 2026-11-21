@@ -306,3 +306,56 @@ chat-floating-widget,
 [class*='chat-floating'] {
   max-width: calc(100vw - 2rem);
 }
+/* Las vistas y los diálogos del panel comparten los tokens del tema personal. */
+.admin-panel.tema-panel .panel-content {
+  --color-primary: var(--tema-lectura);
+  --color-primary-container: color-mix(in srgb, var(--tema-lectura) 85%, black);
+  --color-on-primary: #fff;
+  --color-on-primary-container: #fff;
+  --color-primary-fixed: color-mix(in srgb, var(--tema-lectura) 12%, white);
+  --color-primary-fixed-dim: color-mix(in srgb, var(--tema-lectura) 18%, white);
+  --color-on-primary-fixed: var(--tema-lectura);
+  --color-on-primary-fixed-variant: var(--tema-lectura);
+  accent-color: var(--tema-acento);
+}
+
+.admin-panel.tema-panel .panel-content :is(button, a):is(.bg-primary, .bg-primary-container, .accion-principal, .report-primary-button, .agenda-button:not(.secondary)) {
+  background-color: var(--tema-principal);
+  color: var(--tema-en-principal);
+  border-color: var(--tema-lectura);
+}
+
+.admin-panel.tema-panel .panel-content :is(button, a):is(.bg-primary, .bg-primary-container, .accion-principal, .report-primary-button, .agenda-button:not(.secondary)):hover:not(:disabled, [aria-disabled='true']) {
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.admin-panel.tema-panel .panel-content :is(button, a):is(.bg-primary, .bg-primary-container, .accion-principal, .report-primary-button, .agenda-button:not(.secondary)):active:not(:disabled, [aria-disabled='true']) {
+  box-shadow: inset 0 0 0 2px currentColor;
+}
+
+.admin-panel.tema-panel .panel-content :is(button, a):is(.bg-primary, .bg-primary-container, .accion-principal, .report-primary-button, .agenda-button:not(.secondary)):is(:disabled, [aria-disabled='true']) {
+  background-color: var(--color-surface-container-high);
+  color: var(--color-on-surface-variant);
+  border-color: var(--color-outline-variant);
+  opacity: 1;
+}
+
+.admin-panel.tema-panel .panel-content :is([role='tab'][aria-selected='true'], .pagina-actual, .pagination [aria-current='page'], .pagination .active) {
+  background-color: var(--tema-secundario);
+  color: var(--tema-en-secundario);
+  box-shadow: inset 0 -2px currentColor;
+}
+
+.admin-panel.tema-panel .panel-content .panel-bienvenida {
+  background-image: linear-gradient(135deg, var(--tema-lectura), var(--tema-acento));
+}
+
+.admin-panel.tema-panel .panel-content :is(h1, h2):is(.text-on-surface, .text-slate-800, .text-slate-900) {
+  color: var(--tema-lectura);
+}
+
+.admin-panel.tema-panel .panel-content :is(a, button, input, textarea, select, [tabindex]):focus-visible {
+  outline: 2px solid var(--tema-acento);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px white;
+}

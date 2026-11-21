@@ -1,0 +1,38 @@
+<section aria-label="Archivo del resultado" class="space-y-3">
+  <div class="flex flex-wrap items-center gap-3">
+    <button type="button" (click)="alternarVistaPrevia()" [disabled]="cargando()"
+      [attr.aria-expanded]="vistaPreviaVisible()" aria-controls="vista-previa-resultado"
+      class="inline-flex items-center gap-2 rounded-xl border border-[#049CAB] px-4 py-2 text-sm font-semibold text-[#049CAB] disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]"
+      data-testid="btn-ver-archivo">
+      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">visibility</span>
+      {{ vistaPreviaVisible() ? 'Ocultar vista previa' : 'Ver archivo' }}
+    </button>
+    <button type="button" (click)="descargar()" [disabled]="cargando()"
+      class="inline-flex items-center gap-2 rounded-xl bg-[#049CAB] px-4 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]"
+      data-testid="btn-descargar">
+      <span class="material-symbols-outlined text-[18px]" aria-hidden="true">download</span>
+      Descargar
+    </button>
+    @if (cargando()) {
+      <span class="text-sm text-gray-500" role="status">Cargando archivo…</span>
+    }
+  </div>
+
+  <div aria-live="polite" class="min-h-[1.25rem]">
+    @if (error(); as mensaje) {
+      <p class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" role="alert" data-testid="error-archivo">{{ mensaje }}</p>
+    }
+  </div>
+
+  @if (vistaPreviaVisible() && archivo(); as actual) {
+    <div id="vista-previa-resultado" class="overflow-hidden rounded-xl border border-[#E8EDF4] bg-gray-50" data-testid="vista-previa">
+      @if (esImagen()) {
+        <img [src]="urlObjeto()" [alt]="'Vista previa de ' + actual.nombre" class="mx-auto max-h-[70vh] object-contain" />
+      } @else if (esPdf()) {
+        <iframe [src]="urlSegura()" [title]="'Vista previa de ' + actual.nombre" class="h-[70vh] w-full" ></iframe>
+      } @else {
+        <p class="p-4 text-sm text-gray-600">Este tipo de archivo ({{ actual.contentType }}) no admite vista previa. Use «Descargar».</p>
+      }
+    </div>
+  }
+</section>

@@ -1,4 +1,6 @@
 export interface TenantContext {
+  marca?: { principal: string; secundario: string; logo: string | null } | null;
+  tema?: { principal: string; secundario: string } | null;
   clinica_id: number | null;
   clinica_nombre: string;
   clinica_estado: string | null;

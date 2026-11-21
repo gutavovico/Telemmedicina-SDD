@@ -1,14 +1,16 @@
-import { Component, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TenantService } from '../../../core/services/tenant.service';
 import { normalizeAppRole } from '../../../core/models/auth.models';
 import { TenantSelectorComponent } from '../../../shared/components/tenant-selector/tenant-selector';
+import { InactivityWarning } from '../../auth/inactivity-warning/inactivity-warning';
+import { paletaPanel } from './paleta-panel';
 
 @Component({
   selector: 'app-admin-layout',
-  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, TenantSelectorComponent],
+  imports: [CommonModule, RouterOutlet, RouterLink, RouterLinkActive, TenantSelectorComponent, InactivityWarning],
   templateUrl: './admin-layout.html',
   styleUrl: './admin-layout.css'
 })
@@ -17,8 +19,37 @@ export class AdminLayout {
   readonly tenantService = inject(TenantService);
   private readonly router = inject(Router);
 
+  readonly logoUrl = signal<string | null>(null);
+  readonly temaPanel = computed(() => {
+    const contexto = this.tenantService.currentTenant();
+    const usuario = this.authService.currentUser();
+    if (!contexto?.tema || !usuario || !this.authService.isAdmin() || contexto.es_super_admin
+      || contexto.usuario_id !== usuario.id_usuario || contexto.clinica_id !== usuario.id_clinica) {
+      return null;
+    }
+    return paletaPanel(contexto.tema);
+  });
+  constructor() {
+    effect(onCleanup => {
+      const context = this.tenantService.currentTenant();
+      this.logoUrl.set(null);
+      if (!context?.marca?.logo) return;
+      let url: string | undefined;
+      const subscription = this.tenantService.obtenerLogo().subscribe({
+        next: blob => { url = URL.createObjectURL(blob); this.logoUrl.set(url); },
+        error: () => this.logoUrl.set(null),
+      });
+      onCleanup(() => { subscription.unsubscribe(); if (url) URL.revokeObjectURL(url); });
+    });
+  }
+
   readonly isSidebarOpen = signal(false);
   readonly isDropdownOpen = signal(false);
+
+  /** CU11: mismo criterio que `PermissionsService.hasPermission('lab_results:read')`, sin inyectar nada nuevo. */
+  puedeVerResultadosLaboratorio(): boolean {
+    return this.tenantService.isSuperAdmin() || this.tenantService.permisos().includes('lab_results:read');
+  }
 
   canSeeReports(): boolean {
     const user = this.authService.currentUser();

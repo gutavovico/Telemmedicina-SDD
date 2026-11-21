@@ -117,10 +117,13 @@ export class AuthService {
   });
 
   constructor() {
-    // If authenticated on initial load, fetch the fresh user profile
+    // Si hay una sesión activa, primero obtener el rol oficial y después
+    // consultar el perfil médico solo cuando corresponda. Así se evita el
+    // 404 esperado de /medicos/me para ADMIN, PACIENTE y RECEPCION.
     if (this.isBrowser && this.hasValidToken()) {
-      this.fetchUserProfile().subscribe();
-      this.fetchPerfilMedico();
+      this.fetchUserProfile().subscribe((user) => {
+        if (user) this.fetchPerfilMedico();
+      });
       // Reanuda el control de inactividad con la preferencia guardada (CU23)
       this.inactivity.start(this.getRememberMe());
     }
@@ -131,13 +134,24 @@ export class AuthService {
 
   /**
    * Carga el perfil médico del usuario autenticado (CU04).
-   * Si /medicos/me responde 200, el usuario es doctor; 404 = no lo es.
+   *
+   * ADMIN, PACIENTE y RECEPCION no pueden tener un perfil médico. Para evitar
+   * una solicitud que el backend responde con 404, solo se consulta cuando el
+   * rol es MEDICO o aún no se pudo determinar. Un 404 para un médico significa
+   * que todavía debe completar su perfil profesional.
    */
   fetchPerfilMedico(): void {
     if (!this.getAccessToken()) {
       this.perfilMedico.set(null);
       return;
     }
+
+    const role = this.userRole();
+    if (role !== 'doctor' && role !== 'unknown') {
+      this.perfilMedico.set(null);
+      return;
+    }
+
     this.http.get<MedicoResponse>(`${this.apiUrl}/medicos/me`).subscribe({
       next: (perfil) => this.perfilMedico.set(perfil),
       error: () => this.perfilMedico.set(null),
@@ -168,6 +182,7 @@ export class AuthService {
     const payload: LoginRequest = { correo, password };
     return this.http.post<TokenResponse>(`${this.apiUrl}/auth/login`, payload).pipe(
       tap((response) => {
+        this.tenantService.clearTenant();
         this.saveTokens(response.access_token, response.refresh_token, rememberMe);
         this.mustChangePassword.set(!!response.must_change_password);
 
@@ -182,13 +197,16 @@ export class AuthService {
           };
           this.saveUser(fallbackUser);
         }
-        // Cargar perfil médico (define el rol doctor, CU04)
-        if (!response.must_change_password) this.fetchPerfilMedico();
       }),
       switchMap((response) => {
         if (response.must_change_password) return of(null);
         return forkJoin({
-          profile: this.fetchUserProfile().pipe(catchError(() => of(null))),
+          profile: this.fetchUserProfile().pipe(
+            catchError(() => of(null)),
+            tap((user) => {
+              if (user) this.fetchPerfilMedico();
+            }),
+          ),
           tenant: this.tenantService.loadTenantContext().pipe(catchError(() => of(null))),
         });
       }),
@@ -309,9 +327,7 @@ export class AuthService {
   }
 
   logout(): void {
-    this.inactivity.stop();
-    this.clearTokens();
-    this.router.navigate(['/login']);
+    this.logoutRemoto();
   }
 
   logoutRemoto(): void {
@@ -325,6 +341,12 @@ export class AuthService {
         .subscribe();
     }
 
+    this.clearTokens();
+    this.router.navigate(['/login']);
+  }
+
+  /** Descarta una sesión inválida sin encadenar otra petición de autenticación. */
+  logoutLocal(): void {
     this.clearTokens();
     this.router.navigate(['/login']);
   }

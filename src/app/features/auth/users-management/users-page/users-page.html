@@ -24,7 +24,7 @@
               <button
                 type="button"
                 (click)="openCreateForm()"
-                class="inline-flex items-center justify-center gap-2 rounded-2xl bg-secondary-container/70 hover:bg-secondary-container px-5 py-3 text-sm font-semibold text-primary transition-colors shadow-sm cursor-pointer"
+                class="accion-principal inline-flex items-center justify-center gap-2 rounded-2xl bg-secondary-container/70 hover:bg-secondary-container px-5 py-3 text-sm font-semibold text-primary transition-colors shadow-sm cursor-pointer"
               >
                 <span class="material-symbols-outlined text-[20px]">add</span>
                 Nuevo usuario
@@ -235,7 +235,7 @@
                 >
                   <span class="material-symbols-outlined text-[22px]">chevron_left</span>
                 </button>
-                <div class="min-w-12 h-12 rounded-2xl bg-primary text-white font-semibold flex items-center justify-center px-4">
+                <div aria-current="page" class="pagina-actual min-w-12 h-12 rounded-2xl bg-primary text-white font-semibold flex items-center justify-center px-4">
                   {{ currentPage() }}
                 </div>
                 <button
@@ -293,7 +293,9 @@
             <button
               type="button"
               (click)="confirmStatusChange()"
-              class="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white bg-primary hover:bg-primary-container transition-colors cursor-pointer disabled:opacity-70"
+              class="inline-flex items-center justify-center rounded-2xl px-4 py-3 text-sm font-semibold text-white transition-colors cursor-pointer disabled:opacity-70"
+              [class.bg-error]="confirmTarget()!.estado.toLowerCase() === 'activo'"
+              [class.bg-primary]="confirmTarget()!.estado.toLowerCase() !== 'activo'"
               [disabled]="confirmSubmitting()"
             >
               {{ confirmSubmitting() ? 'Procesando...' : (confirmTarget()!.estado.toLowerCase() === 'activo' ? 'Deshabilitar' : 'Habilitar') }}
