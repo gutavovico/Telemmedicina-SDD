@@ -89,3 +89,30 @@ Decisión del usuario de 2026-11-18, aplicable exclusivamente a los módulos de 
 - Esta excepción NO se extiende a otros módulos ni a código nuevo fuera de CU11.
 - La migración a `AsyncSession` se hará de forma transversal en el futuro, para toda la aplicación a la vez.
 - Las reglas de aislamiento, permisos y sesiones de los demás módulos permanecen vigentes.
+
+## 6. Compatibilidad acotada de la integración CU31/CU34/CU35
+
+Esta integración conserva `Session/get_db` y la identidad de entidad `id_clinica`
+BIGINT ya utilizadas por CU31, con `select/execute/scalars` para consultas nuevas.
+Las solicitudes CU35 usan esa misma FK y filtros por entidad autenticada; no se
+introduce una tabla tenants ni se migran las sesiones de toda la plataforma a UUID.
+El catálogo sigue global en auth.models; suscripciones/pagos/solicitudes quedan
+en tenants.models, sin duplicar Plan/VersionPlan. Tipos web reutilizan el contrato
+core/models/plan.models.ts y la pantalla existente de suscripción de la entidad.
+
+La auditoría de CU30 se atribuye a la entidad cuando ya existe. La excepción NULL
+se amplía únicamente a `tenant_requests/RECHAZAR_TENANT_REQUEST` (aún sin entidad)
+y `tenant_management/ACCESO_DENEGADO`; el CHECK conserva obligatoria la clínica
+para eventos clínicos. No es una relajación general de auditoría global.
+
+Decisiones posteriores confirmadas para CU35: mensual por aniversario con ancla
+original, [inicio,fin), proporcional por segundos con HALF_UP en BOB. Cambio y
+cancelación programados al cierre pagado; cancelación inmediata fuera de alcance.
+El bloqueo clínico por cancelación conserva login y facturación del administrador,
+sin borrar datos ni añadir controles de consumo CU36. El worker requiere activación
+explícita de despliegue; no se ejecuta automáticamente en las pruebas aisladas.
+
+Renovación CU31: aceptar antes del checkout la versión publicada vigente del mismo
+plan; fijarla en el pago y aplicarla al nuevo ciclo solo con cobro confirmado.
+Cancelación pendiente bloquea renovación; cambio pendiente usa su destino exacto.
+No extender fechas ni aplicar condiciones nuevas por una solicitud no pagada.
