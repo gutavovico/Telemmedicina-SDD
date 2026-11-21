@@ -17,6 +17,9 @@ class Clinica(Base):
     telefono = Column(String(30), nullable=True)
     correo = Column(String(150), nullable=True)
     direccion = Column(String(250), nullable=True)
+    color_principal = Column(String(7))
+    color_secundario = Column(String(7))
+    direccion_acceso = Column(String(253), unique=True)
     logo = Column(String(500), nullable=True)
     estado = Column(String(20), nullable=False, default="ACTIVO")
     # Referencia canónica a la versión inmutable del catálogo CU34.
@@ -91,6 +94,13 @@ class Rol(Base):
         return f"<Rol(id={self.id_rol}, nombre='{self.nombre}', estado='{self.estado}')>"
 
 
+class RolStr(str):
+    """String que soporta acceso dual a .nombre para evitar desincronizaciones."""
+    @property
+    def nombre(self) -> str:
+        return str(self)
+
+
 class Usuario(Base):
     __tablename__ = "usuarios"
     __table_args__ = (
@@ -131,7 +141,15 @@ class Usuario(Base):
 
     @property
     def rol(self):
-        return self.rol_rel.nombre if self.rol_rel else None
+        """Nombre del rol (ADMIN, MEDICO, RECEPCION, PACIENTE).
+
+        Lo consumen los guards por rol del frontend Angular y Flutter, que de otro
+        modo recibirian `rol` siempre nulo y negarian el acceso.
+        """
+        if self.rol_rel and self.rol_rel.nombre:
+            return RolStr(self.rol_rel.nombre)
+        return None
+
 
     @property
     def tenant_id(self):

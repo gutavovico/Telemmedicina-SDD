@@ -1,6 +1,6 @@
 """CU35 entitlement gate; no CU36 consumption checks and no tenant deletion."""
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import inspect, select
 from app.modules.tenants.models import TenantSubscription, SubscriptionChange
 from app.modules.tenants.billing import utc
 from app.modules.tenants.subscription_payments import service as payments
@@ -11,6 +11,13 @@ CLINICAL_MODULES = ('app.modules.medical_records.', 'app.modules.appointments.',
 
 def assert_clinical_access(db, tenant_id, now=None):
     if tenant_id is None:
+        return
+    # Esquemas heredados o fixtures ligeras pueden no tener aun las tablas de
+    # suscripcion. En ese caso se conserva la politica previa: sin suscripcion
+    # no hay bloqueo. Cuando las tablas existen, el gate actua con normalidad.
+    inspector = inspect(db.get_bind())
+    if (not inspector.has_table(TenantSubscription.__tablename__)
+            or not inspector.has_table(SubscriptionChange.__tablename__)):
         return
     now = utc(now or payments.now_utc())
     sub = db.scalar(select(TenantSubscription).where(TenantSubscription.id_clinica == tenant_id))

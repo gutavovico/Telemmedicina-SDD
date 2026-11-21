@@ -112,8 +112,8 @@ class CU08LiveQueueTestCase(unittest.TestCase):
             conn.exec_driver_sql("""INSERT INTO medicos (id_medico,id_usuario,id_clinica,matricula_profesional,estado)
                 VALUES (20,2,1,'M20','activo'), (50,5,2,'M50','activo')""")
             conn.exec_driver_sql("""INSERT INTO servicios_medicos
-                (id_servicio,nombre,descripcion,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
-                (1,'Consulta general',NULL,'08:00:00','13:00:00',20,100,'activo')""")
+                (id_servicio,id_clinica,nombre,descripcion,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
+                (1,1,'Consulta general',NULL,'08:00:00','13:00:00',20,100,'activo')""")
             conn.exec_driver_sql(
                 "INSERT INTO horarios_medicos VALUES (1,20,1,6,'activo')")
             conn.exec_driver_sql("""INSERT INTO pacientes
@@ -224,6 +224,28 @@ class CU08LiveQueueTestCase(unittest.TestCase):
         self.assertEqual(self.client.post(PREFIX + "/pausas", json={**base, "motivo": "x"}).status_code, 422)
         self.assertEqual(self.client.post(PREFIX + "/pausas", json={**base, "motivo": "Limpieza", "hora_fin": "09:00"}).status_code, 400)
         self.assertEqual(self.client.post(PREFIX + "/pausas", json={**base, "motivo": "Vieja", "fecha": "2026-10-01"}).status_code, 400)
+
+    def test_pausa_usa_solo_servicios_propios_activos(self):
+        self._as(3)
+        datos = {"id_medico": 20, "fecha": "2026-10-04", "hora_inicio": "10:00",
+                 "hora_fin": "10:15", "motivo": "Desinfección"}
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("UPDATE servicios_medicos SET estado='inactivo' WHERE id_servicio=1")
+            conn.exec_driver_sql("""INSERT INTO servicios_medicos
+                (id_servicio,id_clinica,nombre,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
+                (2,2,'Ajeno','08:00:00','12:00:00',80,100,'activo'),
+                (3,NULL,'Heredado','08:00:00','12:00:00',90,100,'activo')""")
+            conn.exec_driver_sql("INSERT INTO horarios_medicos VALUES (2,20,2,6,'activo')")
+        sin_servicio = self.client.post(PREFIX + "/pausas", json=datos)
+        self.assertEqual(sin_servicio.status_code, 409, sin_servicio.text)
+
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""INSERT INTO servicios_medicos
+                (id_servicio,id_clinica,nombre,hora_inicio,hora_fin,duracion_minutos,costo,estado)
+                VALUES (4,1,'Propio','08:00:00','12:00:00',20,100,'activo')""")
+        pausa = self.client.post(PREFIX + "/pausas", json=datos)
+        self.assertEqual(pausa.status_code, 201, pausa.text)
+        self.assertEqual(pausa.json()["id_servicio"], 4)
 
     def test_roles_y_tenant(self):
         self._as(1)

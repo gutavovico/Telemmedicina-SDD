@@ -92,6 +92,10 @@ class DocumentStorage:
         sha = _sha256_hex(content)
         safe_name = str(name).replace("\\", "_").replace("/", "_")
         key = f"documentos/{sha[:2]}/{sha[2:4]}/{safe_name}"
+        self.write(key, content, content_type)
+        return key, sha
+
+    def write(self, key: str, content: bytes, content_type: str) -> None:
         clean_key = _sanitize_key(key)
 
         if self.backend in ("minio", "r2", "s3"):
@@ -105,7 +109,7 @@ class DocumentStorage:
             dest = self.local_dir / clean_key
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(content)
-        return clean_key, sha
+
 
     def generate_download_url(self, key: str, file_name: str, content_type: str = "application/pdf") -> Tuple[str, int]:
         """Genera una URL de descarga temporal. Devuelve (url, expira_en_segundos)."""

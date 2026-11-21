@@ -1,12 +1,13 @@
 from typing import List
 from pathlib import Path
-from pydantic import SecretStr
+from pydantic import Field, SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
     SUBSCRIPTION_CYCLE_WORKER_ENABLED: bool = False
     # Base de Datos PostgreSQL
+    database_url_override: SecretStr | None = Field(default=None, validation_alias="DATABASE_URL")
     DB_NAME: str = "telemedicina"
     DB_USER: str = "postgres"
     DB_PASSWORD: str = "12345"
@@ -158,6 +159,11 @@ class Settings(BaseSettings):
 
     @property
     def DATABASE_URL(self) -> str:
+        if self.database_url_override is not None:
+            url = self.database_url_override.get_secret_value().strip()
+            if not url:
+                raise ValueError("DATABASE_URL está definida pero vacía")
+            return url
         base = f"postgresql+psycopg2://{self.DB_USER}:{self.DB_PASSWORD}@{self.DB_HOST}:{self.DB_PORT}/{self.DB_NAME}"
         params = []
         if self.DB_SSLMODE:

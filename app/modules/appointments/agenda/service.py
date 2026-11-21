@@ -5,6 +5,7 @@ Los demás estados siguen sujetos a verificación de su intervalo.
 No se registran modelos ni se ejecuta DDL para citas. Los intervalos son [inicio, fin).
 """
 from datetime import date, datetime, time, timedelta, timezone
+import logging
 import unicodedata
 
 from fastapi import HTTPException
@@ -23,6 +24,8 @@ from app.modules.auth.models import Auditoria, Usuario
 from app.modules.communications.models import Notificacion
 from app.modules.medical_records.models import Paciente
 from .schemas import AccionBloqueoResponse, BloqueoCreate, BloqueoResponse, HorarioCreate
+
+logger = logging.getLogger(__name__)
 
 
 ACTIVOS = ("PENDIENTE", "APROBADO")
@@ -104,16 +107,14 @@ def _medico(db, user, tenant_id, id_medico=None):
     return obtener_medico(db, id_medico, current_tenant_id=tenant_id)
 
 
-def _servicio(db, id_servicio, tenant_id):
-    query = db.query(ServicioMedico).filter(ServicioMedico.id_servicio == id_servicio)
-    if tenant_id is not None:
-        query = query.filter(
-            or_(
-                ServicioMedico.id_clinica == tenant_id,
-                ServicioMedico.id_clinica.is_(None),
-            )
-        )
-    servicio = query.first()
+def _servicio(db, id_servicio, tenant_id, *, bloquear=False):
+    query = db.query(ServicioMedico).filter(
+        ServicioMedico.id_servicio == id_servicio,
+        ServicioMedico.id_clinica == tenant_id,
+    )
+    if bloquear:
+        query = query.with_for_update(read=True)
+    servicio = query.populate_existing().first()
     if servicio is None:
         raise HTTPException(404, "Servicio médico no encontrado")
     if servicio.estado.lower() != "activo":
@@ -198,17 +199,10 @@ def _guardar(db):
 
 def listar_servicios(db, user, tenant_id):
     _contexto(db, user, tenant_id)
-    return (
-        db.query(ServicioMedico)
-        .filter(
-            or_(
-                ServicioMedico.id_clinica == tenant_id,
-                ServicioMedico.id_clinica.is_(None),
-            )
-        )
-        .order_by(ServicioMedico.id_servicio)
-        .all()
-    )
+    return db.query(ServicioMedico).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+    ).order_by(ServicioMedico.id_servicio).all()
 
 
 def listar_horarios(db, user, tenant_id, id_medico=None):
@@ -217,7 +211,7 @@ def listar_horarios(db, user, tenant_id, id_medico=None):
 
 def crear_horario(db: Session, datos: HorarioCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    _servicio(db, datos.id_servicio, tenant_id)
+    _servicio(db, datos.id_servicio, tenant_id, bloquear=True)
     _lock_medico(db, medico.id_medico, tenant_id)
     existente = _scope(db, HorarioMedico, user, tenant_id, medico.id_medico).filter(
         HorarioMedico.id_servicio == datos.id_servicio, HorarioMedico.dia_semana == datos.dia_semana
@@ -247,7 +241,7 @@ def cambiar_estado_horario(db, id_horario, estado, user, tenant_id):
     if not horario:
         raise HTTPException(404, "Horario no encontrado")
     if estado == "activo":
-        _servicio(db, horario.id_servicio, tenant_id)
+        _servicio(db, horario.id_servicio, tenant_id, bloquear=True)
     anterior = horario.estado
     horario.estado = estado
     _auditar(db, user, tenant_id, horario, "CAMBIAR_ESTADO", f"Disponibilidad: {anterior} -> {estado}")
@@ -267,7 +261,7 @@ def _segundos(hora: time):
 
 def crear_bloqueo(db: Session, datos: BloqueoCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    servicio = _servicio(db, datos.id_servicio, tenant_id)
+    servicio = _servicio(db, datos.id_servicio, tenant_id, bloquear=True)
     if _rol(user) == "MEDICO" and datos.fecha != hoy_agenda() + timedelta(days=1):
         raise HTTPException(422, "El médico solo puede solicitar bloqueos para el día siguiente")
     inicio, fin = _segundos(datos.hora_inicio), _segundos(datos.hora_fin)
@@ -422,6 +416,18 @@ def cambiar_bloqueo(db, id_bloqueo, accion, user, tenant_id):
     bloqueo.estado = destino
     _auditar(db, user, tenant_id, bloqueo, accion.upper(), f"Bloqueo: {origen} -> {destino}")
     _guardar(db)
+
+    # CU07: al liberar un bloqueo se ofrece el inicio de la franja a la lista
+    # de espera. Best-effort: un fallo nunca revierte la liberación.
+    if accion == "liberar":
+        try:
+            from app.modules.appointments.lista_espera.service import reasignar_por_bloqueo
+
+            reasignar_por_bloqueo(db, bloqueo)
+        except Exception as exc:  # noqa: BLE001 - best effort deliberado
+            db.rollback()
+            logger.warning("CU07: no se pudo reasignar la franja liberada %s: %s", id_bloqueo, exc)
+
     return AccionBloqueoResponse(**BloqueoResponse.model_validate(bloqueo).model_dump(),
         citas_afectadas=[c["id_cita"] for c in afectadas], notificaciones_creadas=creadas, advertencias=advertencias)
 

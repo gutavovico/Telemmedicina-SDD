@@ -146,6 +146,18 @@ def crear_ficha(
             detail="Médico no encontrado en esta clínica",
         )
 
+    if payload.id_servicio is not None:
+        if current_user is not None and current_user.id_clinica != id_clinica:
+            raise HTTPException(403, "La cuenta autenticada no está asociada a esta clínica")
+        servicio = db.query(ServicioMedico).filter(
+            ServicioMedico.id_servicio == payload.id_servicio,
+            ServicioMedico.id_clinica == id_clinica,
+        ).populate_existing().with_for_update(read=True).first()
+        if servicio is None:
+            raise HTTPException(404, "Servicio médico no encontrado en esta clínica")
+        if servicio.estado.lower() != "activo":
+            raise HTTPException(409, "El servicio médico está inactivo")
+
     # 3. Control de concurrencia y prevención de colisión de turno (409 Conflict)
     ficha_existente = (
         db.query(FichaClinica)

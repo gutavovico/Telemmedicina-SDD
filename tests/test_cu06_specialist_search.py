@@ -286,6 +286,32 @@ class CU06SpecialistSearchTestCase(unittest.TestCase):
         self.assertIn(10, medicos_ids)
         self.assertNotIn(11, medicos_ids)
 
+    def test_disponibilidad_no_ofrece_servicios_ajenos_inactivos_o_sin_clinica(self):
+        app.dependency_overrides[get_current_user] = lambda: self.user_paciente1
+        with self.engine.begin() as conn:
+            conn.exec_driver_sql("""INSERT INTO servicios_medicos
+                (id_servicio,id_clinica,nombre,modalidad,costo,duracion_minutos,hora_inicio,hora_fin,estado)
+                VALUES (4,1,'Inactivo','PRESENCIAL',100,30,'14:00:00','16:00:00','inactivo'),
+                       (5,NULL,'Heredado','PRESENCIAL',100,30,'16:00:00','18:00:00','activo')""")
+            conn.exec_driver_sql("UPDATE servicios_medicos SET hora_inicio='13:00:00',hora_fin='14:00:00' WHERE id_servicio=3")
+            conn.exec_driver_sql("INSERT INTO horarios_medicos VALUES (4,10,3,5,'activo'), (5,10,4,5,'activo'), (6,10,5,5,'activo')")
+
+        url = "/api/v1/especialistas/10/disponibilidad"
+        fechas = {"fecha_inicio": "2026-04-10", "fecha_fin": "2026-04-10"}
+        response = self.client.get(url, params=fechas, headers={"X-Tenant-ID": "2"})
+        self.assertEqual(response.status_code, 200, response.text)
+        body = response.json()
+        self.assertEqual([s["id_servicio"] for s in body["servicios"]], [1])
+        slots = body["disponibilidad"][0]["slots"]
+        self.assertTrue(slots)
+        self.assertTrue(all(slot["hora_inicio"] < "12:00:00" for slot in slots))
+        for invalido in (0, 3, 4, 5):
+            with self.subTest(servicio=invalido):
+                resp = self.client.get(url, params={**fechas, "id_servicio": invalido})
+                self.assertEqual(resp.status_code, 200, resp.text)
+                self.assertEqual(resp.json()["servicios"], [])
+                self.assertEqual(resp.json()["disponibilidad"][0]["slots"], [])
+
     def test_medico_otro_tenant_retorna_404(self):
         app.dependency_overrides[get_current_user] = lambda: self.user_paciente1
 

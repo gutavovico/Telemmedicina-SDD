@@ -1,5 +1,5 @@
 from typing import List, Optional
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session, joinedload
 
@@ -209,6 +209,7 @@ def endpoint_update_commercial_agreement(
     summary="Retorna el contexto del tenant autenticado y la identidad del usuario",
 )
 def get_tenant_context(
+    response: Response,
     x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     current_user: Usuario = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -310,7 +311,16 @@ def get_tenant_context(
     elif rol_nombre and rol_nombre not in roles_efectivos:
         roles_efectivos.insert(0, rol_nombre)
 
+    from app.modules.tenants.entity_configuration.dependencies import puede_configurar
+    from app.modules.tenants.entity_configuration.service import COLORES_PREDETERMINADOS, identidad, tema_personal
+
+    response.headers["Cache-Control"] = "private, no-store"
+    tema = None
+    if not super_admin and clinica_id is not None and puede_configurar(current_user, clinica):
+        tema = tema_personal(db, current_user) or COLORES_PREDETERMINADOS
     return TenantContextResponse(
+        marca=identidad(clinica) if clinica_id is not None else None,
+        tema=tema,
         clinica_id=clinica_id,
         clinica_nombre=clinica_nombre,
         clinica_estado=clinica_estado,

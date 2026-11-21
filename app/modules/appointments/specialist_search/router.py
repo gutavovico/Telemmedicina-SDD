@@ -1,15 +1,21 @@
 from datetime import date
 from typing import Optional
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.modules.auth.dependencies import get_current_user, get_required_tenant_id
+from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.models import Usuario
 from .schemas import BusquedaEspecialistasResponse, EspecialistaDisponibilidadResponse
 from .service import buscar_especialistas, obtener_disponibilidad_especialista
 
 router = APIRouter(prefix="", tags=["CU06 - Especialistas"])
+
+
+def _clinica_autenticada(current_user: Usuario = Depends(get_current_user)) -> int:
+    if current_user.id_clinica is None:
+        raise HTTPException(403, "La cuenta autenticada no está asociada a una clínica")
+    return current_user.id_clinica
 
 
 @router.get(
@@ -28,8 +34,7 @@ def endpoint_buscar_especialistas(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
-    tenant_id: int = Depends(get_required_tenant_id),
-    current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(_clinica_autenticada),
 ):
     return buscar_especialistas(
         db=db,
@@ -57,8 +62,7 @@ def endpoint_disponibilidad_especialista(
     fecha_fin: date = Query(..., description="Fecha final YYYY-MM-DD"),
     id_servicio: Optional[int] = Query(None, description="ID del servicio médico opcional"),
     db: Session = Depends(get_db),
-    tenant_id: int = Depends(get_required_tenant_id),
-    current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(_clinica_autenticada),
 ):
     return obtener_disponibilidad_especialista(
         db=db,

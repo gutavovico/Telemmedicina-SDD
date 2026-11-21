@@ -103,10 +103,12 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
             conn.exec_driver_sql("""INSERT INTO medicos (id_medico,id_usuario,id_clinica,matricula_profesional,estado)
                 VALUES (20,2,1,'M20','activo'), (50,5,2,'M50','activo'), (60,6,1,'M60','activo')""")
             conn.exec_driver_sql("""INSERT INTO servicios_medicos
-                (id_servicio,nombre,descripcion,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
-                (1,'Consulta general',NULL,'08:00:00','13:00:00',30,100,'activo'),
-                (2,'Consulta especializada',NULL,'13:00:00','16:00:00',45,150,'activo'),
-                (3,'Evaluación médica',NULL,'16:00:00','18:00:00',60,200,'activo')""")
+                (id_servicio,id_clinica,nombre,descripcion,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
+                (1,1,'Consulta general',NULL,'08:00:00','13:00:00',30,100,'activo'),
+                (2,1,'Consulta especializada',NULL,'13:00:00','16:00:00',45,150,'activo'),
+                (3,1,'Evaluación médica',NULL,'16:00:00','18:00:00',60,200,'activo'),
+                (4,2,'Ajeno',NULL,'08:00:00','13:00:00',30,100,'activo'),
+                (5,NULL,'Heredado',NULL,'08:00:00','13:00:00',30,100,'activo')""")
             conn.exec_driver_sql("INSERT INTO pacientes VALUES (40,4,1), (90,9,2), (41,NULL,1)")
         self._as(2)
 
@@ -137,10 +139,12 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
-    def test_servicios_globales_sin_crud(self):
+    def test_servicios_de_la_clinica_sin_crud(self):
         response = self.client.get(PREFIX + "/servicios")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([s["id_servicio"] for s in response.json()], [1,2,3])
+        self.assertEqual([s["id_servicio"] for s in response.json()], [1, 2, 3])
+        self.assertEqual(self._horario(id_servicio=4).status_code, 404)
+        self.assertEqual(self._bloqueo(id_servicio=5).status_code, 404)
         self.assertEqual(self.client.post(PREFIX + "/servicios", json={}).status_code, 405)
 
     def test_crear_horario_propio_y_duplicado(self):
@@ -346,11 +350,15 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
             self.assertEqual(conn.exec_driver_sql("SELECT COUNT(*) FROM notificaciones").scalar(),0)
 
     def test_servicio_inactivo_y_no_existente(self):
+        self.assertEqual(self._horario().status_code, 201)
         with self.engine.begin() as conn:
             conn.exec_driver_sql("UPDATE servicios_medicos SET estado='inactivo' WHERE id_servicio=1")
         self.assertEqual(self._bloqueo().status_code,409)
         self.assertEqual(self._horario().status_code,409)
         self.assertEqual(self._horario(id_servicio=999).status_code,404)
+        ofrecidos = self.client.get(PREFIX + "/servicios").json()
+        self.assertEqual([servicio["id_servicio"] for servicio in ofrecidos], [2, 3])
+        self.assertEqual(self.client.get(PREFIX + "/horarios").json()[0]["id_servicio"], 1)
 
     def test_sin_autenticacion_y_rol_paciente(self):
         app.dependency_overrides.pop(get_current_user,None)
