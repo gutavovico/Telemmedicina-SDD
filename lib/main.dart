@@ -47,6 +47,8 @@ import 'features/appointments/presentation/screens/mis_citas_screen.dart';
 import 'features/cola_virtual/presentation/providers/cola_provider.dart';
 import 'features/cola_virtual/presentation/screens/cola_operativa_screen.dart';
 import 'features/cola_virtual/presentation/screens/mi_turno_screen.dart';
+import 'features/waitlist/presentation/providers/waitlist_provider.dart';
+import 'features/waitlist/presentation/screens/waitlist_screen.dart';
 import 'features/payments/presentation/providers/payment_provider.dart';
 import 'features/payments/presentation/screens/payment_checkout_screen.dart';
 import 'features/payments/presentation/screens/payment_history_screen.dart';
@@ -102,6 +104,7 @@ class TelemedicinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => AppointmentProvider()),
         ChangeNotifierProvider(create: (_) => TeleconsultaProvider()),
         ChangeNotifierProvider(create: (_) => ColaProvider()),
+        ChangeNotifierProvider(create: (_) => WaitlistProvider()),
         ChangeNotifierProvider(create: (_) => FichaProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalDocumentsProvider()),
         ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
@@ -234,6 +237,8 @@ class TelemedicinaApp extends StatelessWidget {
           '/mis-citas': (context) => const MisCitasScreen(),
           '/mi-cola': (context) => const MiTurnoScreen(),
           '/cola': (context) => const ColaOperativaScreen(),
+          '/lista-espera': (context) =>
+              const PatientOnlyRoute(child: WaitlistScreen()),
           '/fichas': (context) => const FichasScreen(),
           '/fichas/nueva': (context) => const BookFichaScreen(),
           '/documentos': (context) =>

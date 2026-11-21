@@ -426,13 +426,24 @@ class _SpecialistSearchScreenState extends State<SpecialistSearchScreen> {
               ),
             ],
             const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _openAvailability(item),
-                icon: const Icon(Icons.calendar_month, size: 18),
-                label: const Text('Ver Disponibilidad'),
-              ),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _openAvailability(item),
+                    icon: const Icon(Icons.calendar_month, size: 18),
+                    label: const Text('Ver Disponibilidad'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () => _irAListaEspera(item),
+                    icon: const Icon(Icons.schedule, size: 18),
+                    label: const Text('Lista de espera'),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -453,6 +464,22 @@ class _SpecialistSearchScreenState extends State<SpecialistSearchScreen> {
 
   String _formatTime(String value) {
     return value.length >= 5 ? value.substring(0, 5) : value;
+  }
+
+  void _irAListaEspera(SpecialistEntity item) {
+    final principal = item.especialidades.isEmpty
+        ? null
+        : (item.especialidades.where((e) => e.esPrincipal).isEmpty
+            ? item.especialidades.first
+            : item.especialidades.firstWhere((e) => e.esPrincipal));
+    Navigator.of(context).pushNamed(
+      '/lista-espera',
+      arguments: <String, dynamic>{
+        'idMedico': item.idMedico,
+        'idEspecialidad': principal?.idEspecialidad,
+        'nombreMedico': item.nombreCompleto,
+      },
+    );
   }
 
   void _openAvailability(SpecialistEntity item) {

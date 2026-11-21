@@ -113,6 +113,15 @@ class ApiConfig {
       '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
 
+  // Lista de espera y reasignación de turnos (CU07)
+  static String get waitlistUrl => '$baseUrl/api/v1/lista-espera';
+  static String get myWaitlistUrl => '$baseUrl/api/v1/lista-espera/mi-espera';
+  static String waitlistItemUrl(int id) => '$baseUrl/api/v1/lista-espera/$id';
+  static String waitlistConfirmUrl(int id) =>
+      '$baseUrl/api/v1/lista-espera/$id/confirmar';
+  static String waitlistRejectUrl(int id) =>
+      '$baseUrl/api/v1/lista-espera/$id/rechazar';
+
   // Tratamientos Médicos (CU17)
   static String get treatmentsUrl => '$baseUrl/api/v1/tratamientos';
   static String treatmentDetailUrl(int id) => '$baseUrl/api/v1/tratamientos/$id';
