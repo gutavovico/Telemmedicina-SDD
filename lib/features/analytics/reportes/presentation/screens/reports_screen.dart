@@ -41,7 +41,9 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
     _requestFocus = FocusNode(onKeyEvent: (_, event) {
       if (event is! KeyDownEvent || event.logicalKey != LogicalKeyboardKey.enter ||
           HardwareKeyboard.instance.isShiftPressed ||
-          !_requestInput.value.composing.isCollapsed) return KeyEventResult.ignored;
+          !_requestInput.value.composing.isCollapsed) {
+        return KeyEventResult.ignored;
+      }
       _reports.interpretText(generateAfter: true);
       return KeyEventResult.handled;
     });
@@ -66,7 +68,9 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.hidden || state == AppLifecycleState.paused ||
-        state == AppLifecycleState.detached) _reports.cancelVoiceForLifecycle();
+        state == AppLifecycleState.detached) {
+      _reports.cancelVoiceForLifecycle();
+    }
   }
 
   @override
@@ -243,13 +247,16 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
   Widget _definition() {
     final c = _reports, d = c.draft!, report = c.selectedReport!, catalog = c.catalog!;
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      DropdownButtonFormField<String>(value: d.reporte,
+      DropdownButtonFormField<String>(initialValue: d.reporte,
         decoration: const InputDecoration(labelText: 'Tipo de reporte'),
         isExpanded: true,
         items: [for (final item in catalog.reportes) DropdownMenuItem(
           value: item.id, child: Text(item.titulo, overflow: TextOverflow.ellipsis))],
-        onChanged: (value) { if (value != null) c.selectReport(
-          catalog.reportes.firstWhere((item) => item.id == value)); }),
+        onChanged: (value) {
+          if (value != null) {
+            c.selectReport(catalog.reportes.firstWhere((item) => item.id == value));
+          }
+        }),
       const SizedBox(height: 12),
       Text(report.semantica, style: AppTypography.bodySmall),
       const SizedBox(height: 12),
@@ -269,7 +276,9 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
             final groups = [...d.agrupacion], columns = [...d.columnas];
             if (selected) {
               if (groups.length >= (catalog.limites['agrupaciones'] ?? 2) ||
-                  columns.length >= (catalog.limites['columnas'] ?? 6)) return;
+                  columns.length >= (catalog.limites['columnas'] ?? 6)) {
+                return;
+              }
               groups.add(field);
               if (!columns.contains(field)) columns.insert(0, field);
             } else { groups.remove(field); columns.remove(field); }
@@ -300,14 +309,17 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
       Text('Orden de resultados', style: AppTypography.titleMedium),
       DropdownButtonFormField<String>(
         key: ValueKey('orden-${d.orden.map((item) => item.campo).join('-')}'),
-        value: null,
+        initialValue: null,
         decoration: const InputDecoration(labelText: 'Agregar criterio de orden'),
         items: [for (final field in d.columnas.where((field) =>
           report.ordenables.contains(field) &&
           !d.orden.any((sort) => sort.campo == field)))
           DropdownMenuItem(value: field, child: Text(_label(field)))],
-        onChanged: (value) { if (value != null) c.edit(d.copyWith(
-          orden: [...d.orden, ReportSort(value, 'asc')])); }),
+        onChanged: (value) {
+          if (value != null) {
+            c.edit(d.copyWith(orden: [...d.orden, ReportSort(value, 'asc')]));
+          }
+        }),
       for (var i = 0; i < d.orden.length; i++) Column(
         crossAxisAlignment: CrossAxisAlignment.start, children: [
         Text('${i + 1}. ${_label(d.orden[i].campo)}'),
@@ -330,7 +342,7 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
         }, icon: const Icon(Icons.close)),
         ]),
       ]),
-      DropdownButtonFormField<int>(value: d.tamanoPagina,
+      DropdownButtonFormField<int>(initialValue: d.tamanoPagina,
         decoration: const InputDecoration(labelText: 'Grupos por página'),
         items: [for (final size in [10, 20, 50, 100].where(
           (size) => size <= (catalog.limites['tamano_pagina'] ?? 100)))
@@ -354,8 +366,9 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
           initialDate: DateTime.tryParse(value) ?? DateTime.now(),
           firstDate: DateTime(1), lastDate: DateTime(9999, 12, 31));
         if (!mounted || _reports.account != account) return;
-        if (selected != null) changed(
-          '${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}');
+        if (selected != null) {
+          changed('${selected.year.toString().padLeft(4, '0')}-${selected.month.toString().padLeft(2, '0')}-${selected.day.toString().padLeft(2, '0')}');
+        }
       });
 
   Widget _filter(String field, ReportQuery d) {
@@ -375,15 +388,16 @@ class _ReportsScreenState extends State<ReportsScreen> with WidgetsBindingObserv
     } else if (field == 'estado') {
       for (final item in _states) { options[item] = item; }
     }
-    return DropdownButtonFormField<String>(value: options.containsKey(value) ? value : '',
+    return DropdownButtonFormField<String>(initialValue: options.containsKey(value) ? value : '',
       decoration: InputDecoration(labelText: _label(field)), isExpanded: true,
       items: [for (final item in options.entries) DropdownMenuItem(
         value: item.key, child: Text(item.value, overflow: TextOverflow.ellipsis))],
       onChanged: (next) {
         if (next == null) return;
         final filters = d.filtros.where((item) => item.campo != field).toList();
-        if (next.isNotEmpty) filters.add(ReportFilter(field,
-          field.startsWith('id_') ? int.parse(next) : next));
+        if (next.isNotEmpty) {
+          filters.add(ReportFilter(field, field.startsWith('id_') ? int.parse(next) : next));
+        }
         _reports.edit(d.copyWith(filtros: filters));
       });
   }

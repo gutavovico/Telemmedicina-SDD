@@ -33,6 +33,9 @@ class ApiConfig {
   static String get doctorsUrl => '$baseUrl/api/v1/medicos';
   static String get specialtiesUrl => '$baseUrl/api/v1/especialidades';
 
+  // Directorio de especialistas y disponibilidad (CU06)
+  static String get specialistsUrl => '$baseUrl/api/v1/especialistas';
+
   // Citas y Consultas (Appointments - CU25)
   static String get appointmentsUrl => '$baseUrl/citas';
   static String get availableSlotsUrl => '$baseUrl/citas/horarios-disponibles';
@@ -43,37 +46,79 @@ class ApiConfig {
   // Documentos Clínicos (Medical Records - CU12)
   static String get documentsUrl => '$baseUrl/api/v1/documentos';
   static String get myDocumentsUrl => '$baseUrl/api/v1/documentos/me';
-  static String patientDocumentsUrl(int id) => '$baseUrl/api/v1/pacientes/$id/documentos';
+  static String patientDocumentsUrl(int id) =>
+      '$baseUrl/api/v1/pacientes/$id/documentos';
   static String documentDetailUrl(int id) => '$baseUrl/api/v1/documentos/$id';
   static String documentDownloadUrl(int id) =>
       '$baseUrl/api/v1/documentos/$id/download';
+  static String documentFileUrl(int id) => '$baseUrl/api/v1/documentos/$id/file';
+
+  // Resultados de Laboratorio (Medical Records - CU11, solo lectura)
+  static String get myLabResultsUrl => '$baseUrl/api/v1/resultados-laboratorio/me';
+  static String labResultFileUrl(int id) =>
+      '$baseUrl/api/v1/resultados-laboratorio/$id/archivo';
 
   // Recetas Médicas Digitales (Medical Records - CU16, solo lectura paciente)
   static String get prescriptionsUrl => '$baseUrl/api/v1/recetas';
   static String prescriptionDetailUrl(int id) => '$baseUrl/api/v1/recetas/$id';
   static String prescriptionPdfUrl(int id) => '$baseUrl/api/v1/recetas/$id/pdf';
 
+  // Asistencia Inteligente de Tratamiento (CU18)
+  static String get assistanceEvaluateUrl => '$baseUrl/api/v1/asistencia-tratamiento/evaluar';
+  static String get assistanceHistoryUrl => '$baseUrl/api/v1/asistencia-tratamiento/historial';
+  static String assistanceDetailUrl(int id) => '$baseUrl/api/v1/asistencia-tratamiento/evaluaciones/$id';
+  static String get assistanceCatalogUrl => '$baseUrl/api/v1/asistencia-tratamiento/interacciones/catalogo';
+
   // Teleconsulta y Chat de Cita Médica (CU14 / CU15)
-  static String teleconsultaUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/teleconsulta';
-  static String get myTeleconsultaUrl => '$baseUrl/api/v1/citas/me/teleconsulta';
-  static String chatMensajesUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
-  static String get teleconsultaConfigUrl => '$baseUrl/citas/teleconsulta/config';
-  static String teleconsultaPresenciaUrl(int idCita) => '$baseUrl/citas/$idCita/presencia';
-  static String teleconsultaChatRealtimeUrl(int idCita) => '$baseUrl/citas/$idCita/chat/realtime';
-  static String teleconsultaWebrtcSignalUrl(int idCita) => '$baseUrl/citas/$idCita/webrtc/signal';
+  static String teleconsultaUrl(int idCita) =>
+      '$baseUrl/api/v1/citas/$idCita/teleconsulta';
+  static String get myTeleconsultaUrl =>
+      '$baseUrl/api/v1/citas/me/teleconsulta';
+  static String chatMensajesUrl(int idCita) =>
+      '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
+  static String get teleconsultaConfigUrl =>
+      '$baseUrl/citas/teleconsulta/config';
+  static String teleconsultaPresenciaUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/presencia';
+  static String teleconsultaChatRealtimeUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/chat/realtime';
+  static String teleconsultaWebrtcSignalUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/webrtc/signal';
 
   // CU22/CU27 reportes; el backend resuelve id_clinica desde la sesión.
   static String get reportCatalogUrl => '$baseUrl/analytics/reportes/catalogo';
   static String get reportOptionsUrl => '$baseUrl/analytics/reportes/opciones';
   static String get reportQueryUrl => '$baseUrl/analytics/reportes/consulta';
   static String get reportExportUrl => '$baseUrl/analytics/reportes/exportar';
-  static String get reportInterpretUrl => '$baseUrl/analytics/reportes/interpretar';
-  static String get reportTranscribeUrl => '$baseUrl/analytics/reportes/transcribir';
+  static String get reportInterpretUrl =>
+      '$baseUrl/analytics/reportes/interpretar';
+  static String get reportTranscribeUrl =>
+      '$baseUrl/analytics/reportes/transcribir';
+  // Pagos de citas y teleconsultas + comprobantes (CU19)
+  static String get paymentsUrl => '$baseUrl/pagos';
+  static String get paymentsCheckoutUrl => '$baseUrl/pagos/checkout';
+  static String get paymentsPendingUrl => '$baseUrl/pagos/pendientes';
+  static String get paymentsMineUrl => '$baseUrl/pagos/mis-pagos';
+  static String get paymentsStateUrl => '$baseUrl/pagos/estado-pasarela';
+  static String paymentUrl(int idPago) => '$baseUrl/pagos/$idPago';
+  static String paymentSyncUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/sincronizar';
+  static String paymentSimulateUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/simular-pago';
+  static String paymentReceiptUrl(int idPago) =>
+      '$baseUrl/pagos/$idPago/comprobante/pdf';
+
+  // Notificaciones push del móvil (CU19)
+  static String get pushDevicesUrl => '$baseUrl/notificaciones/dispositivos';
+  static String pushDeviceUrl(int id) => '$baseUrl/notificaciones/dispositivos/$id';
+
   // Fila virtual y tiempos de espera (CU08)
   static String get liveQueueUrl => '$baseUrl/api/v1/cola';
   static String get miTurnoUrl => '$baseUrl/api/v1/cola/mi-turno';
-  static String avanzarColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/avanzar';
-  static String perdidaColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/perdida';
+  static String avanzarColaUrl(int idCita) =>
+      '$baseUrl/api/v1/cola/$idCita/avanzar';
+  static String perdidaColaUrl(int idCita) =>
+      '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
 
   // Notificaciones y Recordatorios Multicanal (CU20)
@@ -85,11 +130,61 @@ class ApiConfig {
   static String notificacionRevocarDispositivoUrl(String dispositivoId) =>
       '$baseUrl/api/v1/notificaciones/dispositivos/$dispositivoId';
 
+  // Lista de espera y reasignación de turnos (CU07)
+  static String get waitlistUrl => '$baseUrl/api/v1/lista-espera';
+  static String get myWaitlistUrl => '$baseUrl/api/v1/lista-espera/mi-espera';
+  static String waitlistItemUrl(int id) => '$baseUrl/api/v1/lista-espera/$id';
+  static String waitlistConfirmUrl(int id) =>
+      '$baseUrl/api/v1/lista-espera/$id/confirmar';
+  static String waitlistRejectUrl(int id) =>
+      '$baseUrl/api/v1/lista-espera/$id/rechazar';
+
+  // Tratamientos Médicos (CU17)
+  static String get treatmentsUrl => '$baseUrl/api/v1/tratamientos';
+  static String treatmentDetailUrl(int id) => '$baseUrl/api/v1/tratamientos/$id';
+  static String cronogramaUrl(int id, String fecha) =>
+      '$baseUrl/api/v1/tratamientos/$id/cronograma?fecha=$fecha';
+  static String adherenciaUrl(int id) =>
+      '$baseUrl/api/v1/tratamientos/$id/adherencia';
+  static String dosisIntentosUrl(int idDosis) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/intentos';
+  static String dosisRegistrosUrl(int idDosis) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros';
+  static String dosisIdempotenciaUrl(int idDosis, String key) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros/idempotencia/$key';
+  static String dosisResolverUrl(int idDosis, String key) =>
+      '$baseUrl/api/v1/tratamientos/dosis/$idDosis/registros/idempotencia/$key/resolver';
+  static String avisosUrl({int skip = 0, int limit = 20, bool noLeidos = false}) =>
+      '$baseUrl/api/v1/tratamientos/avisos?skip=$skip&limit=$limit${noLeidos ? '&no_leidos=true' : ''}';
+  static String leerAvisoUrl(int idAviso) =>
+      '$baseUrl/api/v1/tratamientos/avisos/$idAviso/leer';
+  static String get dispositivosUrl =>
+      '$baseUrl/api/v1/tratamientos/dispositivos';
+  static String dispositivoDetailUrl(int idDispositivo) =>
+      '$baseUrl/api/v1/tratamientos/dispositivos/$idDispositivo';
+
+  // Aliases for compatibility
+  static String treatmentScheduleUrl(int id, String fecha) => cronogramaUrl(id, fecha);
+  static String treatmentAdherenceUrl(int id) => adherenciaUrl(id);
+  static String doseAttemptsUrl(int idDosis) => dosisIntentosUrl(idDosis);
+  static String doseRecordsUrl(int idDosis) => dosisRegistrosUrl(idDosis);
+  static String doseIdempotencyUrl(int idDosis, String idempotencyKey) =>
+      dosisIdempotenciaUrl(idDosis, idempotencyKey);
+  static String doseResolveUrl(int idDosis, String idempotencyKey) =>
+      dosisResolverUrl(idDosis, idempotencyKey);
+  static String get treatmentAlertsUrl => '$baseUrl/api/v1/tratamientos/avisos';
+  static String treatmentAlertReadUrl(int idAviso) => leerAvisoUrl(idAviso);
+  static String get treatmentDevicesUrl => dispositivosUrl;
+  static String treatmentDeviceDetailUrl(int idDispositivo) =>
+      dispositivoDetailUrl(idDispositivo);
+
   // Request timeout duration
   static const Duration timeoutDuration = Duration(seconds: 15);
   static const Duration downloadTimeoutDuration = Duration(seconds: 60);
   static const Duration reportExportTimeoutDuration = Duration(seconds: 60);
-  static const Duration reportTranscriptionTimeoutDuration = Duration(seconds: 60);
+  static const Duration reportTranscriptionTimeoutDuration = Duration(
+    seconds: 60,
+  );
 
   // Inactivity timeout configuration (CU23)
   static const int inactivityTimeoutMinutes = 15;

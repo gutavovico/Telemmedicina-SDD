@@ -38,7 +38,7 @@ class LocalHeadsUpNotificationService {
       );
 
       await _plugin.initialize(
-        initSettings,
+        settings: initSettings,
         onDidReceiveNotificationResponse: (NotificationResponse response) {
           _manejarToquePayload(response.payload);
         },
@@ -131,10 +131,10 @@ class LocalHeadsUpNotificationService {
           : DateTime.now().millisecondsSinceEpoch.remainder(100000);
 
       await _plugin.show(
-        notifId,
-        notif.titulo,
-        notif.mensaje,
-        details,
+        id: notifId,
+        title: notif.titulo,
+        body: notif.mensaje,
+        notificationDetails: details,
         payload: payload,
       );
     } catch (e) {

@@ -161,7 +161,9 @@ class ReportsController extends ChangeNotifier {
   Future<void> interpretText({required bool generateAfter, DateTime? now}) async {
     if (_account == null || catalog == null || options == null ||
         voiceState != 'idle' || pendingTranscript != null ||
-        interpreting || loadingReport || loadingCatalog) return;
+        interpreting || loadingReport || loadingCatalog) {
+      return;
+    }
     final text = requestText.trim();
     if (text.isEmpty || text.length > 1000) {
       interpretError = 'Escribe una solicitud de hasta 1000 caracteres.';
@@ -221,7 +223,9 @@ class ReportsController extends ChangeNotifier {
     if (_account == null || catalog == null || options == null ||
         voiceState != 'idle' || interpreting || loadingReport ||
         pendingTranscript != null || _voiceStartFinished != null ||
-        _voiceCleanup != null) return;
+        _voiceCleanup != null) {
+      return;
+    }
     final startFinished = Completer<void>();
     _voiceStartFinished = startFinished;
     final ticket = ++_voiceTicket;
@@ -427,7 +431,9 @@ class ReportsController extends ChangeNotifier {
       return 'El período supera el límite del catálogo.';
     }
     if (query.tamanoPagina < 1 || query.tamanoPagina >
-        (catalogInfo.limites['tamano_pagina'] ?? 100)) return 'Tamaño de página no permitido.';
+        (catalogInfo.limites['tamano_pagina'] ?? 100)) {
+      return 'Tamaño de página no permitido.';
+    }
     if (query.filtros.length > (catalogInfo.limites['filtros'] ?? 8) ||
         query.filtros.map((e) => e.campo).toSet().length != query.filtros.length ||
         query.filtros.any((e) => !resolvedSource.filtros.contains(e.campo))) {

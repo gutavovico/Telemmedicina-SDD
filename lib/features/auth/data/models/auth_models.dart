@@ -75,12 +75,13 @@ class UserModel extends UserEntity {
     super.idClinica,
     super.rolNombre,
     super.tenantId,
+    super.notificacionesPush,
     dynamic estado,
   }) : super(
-          estado: estado is bool
-              ? (estado ? 'activo' : 'inactivo')
-              : estado?.toString(),
-        );
+         estado: estado is bool
+             ? (estado ? 'activo' : 'inactivo')
+             : estado?.toString(),
+       );
 
   String get nombreCompleto => '$nombres $apellidos'.trim();
 
@@ -115,6 +116,7 @@ class UserModel extends UserEntity {
       rolNombre: rolParsed,
       tenantId: (json['tenant_id'] ?? json['id_clinica'])?.toString(),
       estado: json['estado'],
+      notificacionesPush: json['notificaciones_push'] as bool? ?? true,
     );
   }
 
@@ -129,6 +131,7 @@ class UserModel extends UserEntity {
     'rol_nombre': rolNombre,
     'tenant_id': tenantId,
     'estado': estado,
+    'notificaciones_push': notificacionesPush,
   };
 }
 
@@ -140,10 +143,7 @@ class ForgotPasswordRequest {
 
   ForgotPasswordRequest({required this.correo, this.canal = 'email'});
 
-  Map<String, dynamic> toJson() => {
-    'correo': correo.trim(),
-    'canal': canal,
-  };
+  Map<String, dynamic> toJson() => {'correo': correo.trim(), 'canal': canal};
 }
 
 /// Estado de inactividad de la sesion actual (CU23).

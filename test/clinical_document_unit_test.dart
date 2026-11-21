@@ -12,7 +12,6 @@ import 'package:mobile_telemedicina/features/medical_records/domain/repositories
 import 'package:mobile_telemedicina/features/medical_records/domain/usecases/download_document_usecase.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/usecases/get_document_detail_usecase.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/usecases/get_my_documents_usecase.dart';
-import 'package:mobile_telemedicina/features/medical_records/domain/usecases/get_patient_documents_usecase.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/usecases/get_tenant_documents_usecase.dart';
 import 'package:mobile_telemedicina/features/medical_records/presentation/providers/clinical_documents_provider.dart';
 
@@ -22,10 +21,12 @@ class FakeApiClient implements ApiClientInterface {
   final List<String> getCalls = [];
   Uint8List downloadResponse = Uint8List.fromList([1, 2, 3]);
   Uint8List Function()? downloadBuilder;
+  ApiException? downloadFailure;
+  final List<bool> downloadAuth = [];
   int getCallsCount = 0;
 
   @override
-  Future<dynamic> get(String url, {bool includeAuth = true, String? authToken}) async {
+  Future<dynamic> get(String url, {bool includeAuth = true, String? authToken, Map<String, String>? headers}) async {
     getCalls.add(url);
     getCallsCount++;
     return getResponses[url.split('?').first];
@@ -36,14 +37,36 @@ class FakeApiClient implements ApiClientInterface {
     String url, {
     dynamic body,
     bool includeAuth = true,
+    Map<String, String>? headers,
   }) async {
     getCalls.add('P:$url');
     return postResponses[url];
   }
 
   @override
+  Future<dynamic> patch(
+    String url, {
+    dynamic body,
+    bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async => null;
+
+  @override
+  Future<dynamic> delete(
+    String url, {
+    bool includeAuth = true,
+    Map<String, String>? headers,
+  }) async => null;
+
+  @override
   Future<Uint8List> downloadBytes(String url, {bool includeAuth = true}) async {
     getCalls.add('D:$url');
+    downloadAuth.add(includeAuth);
+    if (downloadFailure != null) {
+      final error = downloadFailure!;
+      downloadFailure = null;
+      throw error;
+    }
     return downloadBuilder?.call() ?? downloadResponse;
   }
 }
@@ -220,6 +243,7 @@ void main() {
       expect(ApiConfig.patientDocumentsUrl(7), endsWith('/api/v1/pacientes/7/documentos'));
       expect(ApiConfig.documentDetailUrl(4), endsWith('/api/v1/documentos/4'));
       expect(ApiConfig.documentDownloadUrl(4), endsWith('/api/v1/documentos/4/download'));
+      expect(ApiConfig.documentFileUrl(4), endsWith('/api/v1/documentos/4/file'));
       expect(ApiConfig.downloadTimeoutDuration, const Duration(seconds: 60));
     });
   });
@@ -317,6 +341,34 @@ void main() {
       final bytes = await service.downloadDocumentBytes(4);
       expect(bytes, [1, 2, 3]);
       expect(fakeClient.getCalls, contains('D:http://storage/signed'));
+      expect(fakeClient.downloadAuth, [false]);
+    });
+
+    test('URL local usa ruta autenticada por ID en el host configurado', () async {
+      fakeClient.getResponses[ApiConfig.documentDownloadUrl(4)] = {
+        'id_documento': 4,
+        'url_firmada': 'http://localhost:8000/api/v1/documentos/file/documentos/a.pdf',
+        'expira_en': 60,
+        'nombre_archivo': 'a.pdf',
+        'content_type': 'application/pdf',
+      };
+      await ClinicalDocumentService(apiClient: fakeClient).downloadDocumentBytes(4);
+      expect(fakeClient.getCalls, contains('D:${ApiConfig.documentFileUrl(4)}'));
+      expect(fakeClient.downloadAuth, [true]);
+    });
+
+    test('si falla R2 reintenta por backend con ID autorizado', () async {
+      fakeClient.getResponses[ApiConfig.documentDownloadUrl(4)] = {
+        'id_documento': 4,
+        'url_firmada': 'https://storage.example/documentos/a.pdf?token=x',
+        'expira_en': 60,
+        'nombre_archivo': 'a.pdf',
+        'content_type': 'application/pdf',
+      };
+      fakeClient.downloadFailure = NetworkException();
+      await ClinicalDocumentService(apiClient: fakeClient).downloadDocumentBytes(4);
+      expect(fakeClient.getCalls, contains('D:${ApiConfig.documentFileUrl(4)}'));
+      expect(fakeClient.downloadAuth, [false, true]);
     });
   });
 
@@ -398,6 +450,11 @@ void main() {
       expect(await uc(1), [9]);
     });
 
+    test('DownloadDocumentUseCase rechaza archivo vacío', () async {
+      final uc = DownloadDocumentUseCase(repository: FakeRepository(bytes: Uint8List(0)));
+      await expectLater(uc(1), throwsA(isA<StateError>()));
+    });
+
     test('RequestDocumentDownloadUrlUseCase devuelve la URL firmada', () async {
       final repo = FakeRepository(descargable: desc);
       final uc = RequestDocumentDownloadUrlUseCase(repository: repo);
@@ -423,7 +480,6 @@ void main() {
       return ClinicalDocumentsProvider(
         getMyDocumentsUseCase: GetMyDocumentsUseCase(repository: repo),
         getTenantDocumentsUseCase: GetTenantDocumentsUseCase(repository: repo),
-        getPatientDocumentsUseCase: GetPatientDocumentsUseCase(repository: repo),
         getDocumentDetailUseCase: GetDocumentDetailUseCase(repository: repo),
         downloadDocumentUseCase: DownloadDocumentUseCase(repository: repo),
       );

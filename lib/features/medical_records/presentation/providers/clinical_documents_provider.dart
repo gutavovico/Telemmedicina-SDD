@@ -5,26 +5,22 @@ import '../../../medical_records/domain/entities/clinical_document.dart';
 import '../../../medical_records/domain/usecases/download_document_usecase.dart';
 import '../../../medical_records/domain/usecases/get_document_detail_usecase.dart';
 import '../../../medical_records/domain/usecases/get_my_documents_usecase.dart';
-import '../../../medical_records/domain/usecases/get_patient_documents_usecase.dart';
 import '../../../medical_records/domain/usecases/get_tenant_documents_usecase.dart';
 import '../../../../core/network/api_exceptions.dart';
 
 class ClinicalDocumentsProvider extends ChangeNotifier {
   final GetMyDocumentsUseCase _getMyDocumentsUseCase;
   final GetTenantDocumentsUseCase _getTenantDocumentsUseCase;
-  final GetPatientDocumentsUseCase _getPatientDocumentsUseCase;
   final GetDocumentDetailUseCase _getDocumentDetailUseCase;
   final DownloadDocumentUseCase _downloadDocumentUseCase;
 
   ClinicalDocumentsProvider({
     GetMyDocumentsUseCase? getMyDocumentsUseCase,
     GetTenantDocumentsUseCase? getTenantDocumentsUseCase,
-    GetPatientDocumentsUseCase? getPatientDocumentsUseCase,
     GetDocumentDetailUseCase? getDocumentDetailUseCase,
     DownloadDocumentUseCase? downloadDocumentUseCase,
   })  : _getMyDocumentsUseCase = getMyDocumentsUseCase ?? GetMyDocumentsUseCase(),
         _getTenantDocumentsUseCase = getTenantDocumentsUseCase ?? GetTenantDocumentsUseCase(),
-        _getPatientDocumentsUseCase = getPatientDocumentsUseCase ?? GetPatientDocumentsUseCase(),
         _getDocumentDetailUseCase = getDocumentDetailUseCase ?? GetDocumentDetailUseCase(),
         _downloadDocumentUseCase = downloadDocumentUseCase ?? DownloadDocumentUseCase();
 

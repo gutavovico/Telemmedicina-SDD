@@ -4,6 +4,7 @@ import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../teleconsulta/presentation/screens/chat_teleconsulta_screen.dart';
+import '../../../payments/presentation/screens/payment_checkout_screen.dart';
 import '../../../teleconsulta/presentation/screens/sala_espera_screen.dart';
 import '../../data/models/appointment_model.dart';
 import '../providers/appointment_provider.dart';
@@ -622,10 +623,11 @@ class _MisCitasScreenState extends State<MisCitasScreen>
                   Expanded(
                     child: ElevatedButton.icon(
                       onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Redirigiendo a pasarela de pago seguro...'),
-                            backgroundColor: AppColors.warning,
+                        // CU19: abre la pantalla de pago (Stripe Checkout + QR).
+                        Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) =>
+                                PaymentCheckoutScreen(idCita: cita.idCita),
                           ),
                         );
                       },

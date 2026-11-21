@@ -6,6 +6,7 @@ import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../medical_records/domain/entities/clinical_document.dart';
 import '../providers/clinical_documents_provider.dart';
 import 'document_viewer_screen.dart';
+import 'lab_results_list_screen.dart';
 
 /// Pantalla de listado de documentos clínicos del paciente (CU12).
 /// Consulta `/api/v1/documentos/me` con filtro por tipo de documento.
@@ -112,9 +113,18 @@ class _DocumentsListScreenState extends State<DocumentsListScreen> {
               child: ChoiceChip(
                 label: Text(entry.value),
                 selected: provider.activeTipoDocumento == entry.key,
-                onSelected: (_) => provider.setTipoDocumento(
-                  provider.activeTipoDocumento == entry.key ? null : entry.key,
-                ),
+                onSelected: (_) {
+                  if (entry.key == 'RESULTADO_LAB') {
+                    // CU11: los resultados de laboratorio tienen su propia pantalla.
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LabResultsListScreen()),
+                    );
+                    return;
+                  }
+                  provider.setTipoDocumento(
+                    provider.activeTipoDocumento == entry.key ? null : entry.key,
+                  );
+                },
                 showCheckmark: false,
                 labelStyle: TextStyle(
                   fontSize: 12,

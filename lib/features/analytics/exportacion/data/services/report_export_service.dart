@@ -74,7 +74,9 @@ class ReportExportService {
     final candidate = match?.group(1) ?? '';
     if (RegExp(r'^reporte_[a-z_]+_[0-9]{8}_[0-9]{6}\.(pdf|xlsx|csv|html)$')
         .hasMatch(candidate) && candidate.startsWith('reporte_${report}_') &&
-        candidate.endsWith('.$format')) return candidate;
+        candidate.endsWith('.$format')) {
+      return candidate;
+    }
     final stamp = DateTime.now().toUtc().toIso8601String()
         .replaceAll(RegExp(r'[^0-9]'), '').padRight(14, '0').substring(0, 14);
     return 'reporte_${report}_$stamp.$format';

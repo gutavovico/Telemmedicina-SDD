@@ -9,6 +9,7 @@ class UserEntity {
   final String? rolNombre;
   final String? tenantId;
   final String? estado;
+  final bool notificacionesPush;
 
   bool get isPatient => rolNombre?.trim().toUpperCase() == 'PACIENTE';
 
@@ -23,5 +24,6 @@ class UserEntity {
     this.rolNombre,
     this.tenantId,
     this.estado,
+    this.notificacionesPush = true,
   });
 }

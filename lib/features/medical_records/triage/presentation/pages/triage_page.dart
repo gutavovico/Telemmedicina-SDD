@@ -6,8 +6,10 @@ import '../../data/models/triage_model.dart';
 import '../../data/services/triage_service.dart';
 
 class TriagePage extends StatefulWidget {
+  const TriagePage({super.key});
+
   @override
-  _TriagePageState createState() => _TriagePageState();
+  State<TriagePage> createState() => _TriagePageState();
 }
 
 class _TriagePageState extends State<TriagePage> {
@@ -17,8 +19,8 @@ class _TriagePageState extends State<TriagePage> {
   String? _motivo;
   int _intensidadDolor = 1;
   String? _tiempoEvolucion;
-  List<String> _signosAlarma = [];
-  List<File> _archivos = [];
+  final List<String> _signosAlarma = [];
+  final List<File> _archivos = [];
 
   bool _loadingPreliminar = false;
   bool _loadingIA = false;
@@ -112,12 +114,15 @@ class _TriagePageState extends State<TriagePage> {
     setState(() => _loadingPreliminar = true);
     try {
       final res = await _triageService.calcularPreliminar(_getFormData());
+      if (!mounted) return;
       setState(() => _resultado = res);
       _showResultDialog(res);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      setState(() => _loadingPreliminar = false);
+      if (mounted) setState(() => _loadingPreliminar = false);
     }
   }
 
@@ -133,12 +138,15 @@ class _TriagePageState extends State<TriagePage> {
     setState(() => _loadingIA = true);
     try {
       final res = await _triageService.analizarIA(_getFormData(), _archivos);
+      if (!mounted) return;
       setState(() => _resultado = res);
       _showResultDialog(res);
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     } finally {
-      setState(() => _loadingIA = false);
+      if (mounted) setState(() => _loadingIA = false);
     }
   }
 
@@ -266,7 +274,7 @@ class _TriagePageState extends State<TriagePage> {
               onChanged: (val) => _toggleSigno(s),
               contentPadding: EdgeInsets.zero,
               controlAffinity: ListTileControlAffinity.leading,
-            )).toList(),
+            )),
             SizedBox(height: 16),
 
             Text('5. Consulta directa', style: TextStyle(fontWeight: FontWeight.bold)),
@@ -293,7 +301,7 @@ class _TriagePageState extends State<TriagePage> {
               leading: Icon(Icons.insert_drive_file),
               title: Text(e.value.path.split('/').last, overflow: TextOverflow.ellipsis),
               trailing: IconButton(icon: Icon(Icons.close), onPressed: () => _removeFile(e.key)),
-            )).toList(),
+            )),
             SizedBox(height: 24),
 
             Row(

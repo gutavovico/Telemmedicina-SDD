@@ -11,7 +11,13 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authController = context.watch<AuthController>();
-    final notificacionProvider = context.watch<NotificacionProvider>();
+    NotificacionProvider? notificacionProvider;
+    try {
+      notificacionProvider = context.watch<NotificacionProvider>();
+    } catch (_) {
+      notificacionProvider = null;
+    }
+    final conteoNoLeidas = notificacionProvider?.conteoNoLeidas ?? 0;
     final user = authController.currentUser;
     final isPatient = authController.isPatient;
 
@@ -65,9 +71,9 @@ class HomeScreen extends StatelessWidget {
               Navigator.of(context).pushNamed('/notificaciones');
             },
             icon: Badge(
-              isLabelVisible: notificacionProvider.conteoNoLeidas > 0,
+              isLabelVisible: conteoNoLeidas > 0,
               label: Text(
-                '${notificacionProvider.conteoNoLeidas}',
+                '$conteoNoLeidas',
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 10,
@@ -318,6 +324,29 @@ class HomeScreen extends StatelessWidget {
                     color: AppColors.secondary,
                     onTap: () => Navigator.of(context).pushNamed('/recetas'),
                   ),
+                  _buildServiceCard(
+                    icon: Icons.psychology_outlined,
+                    title: 'Asistencia IA',
+                    subtitle: 'Alertas y sugerencias de tratamiento',
+                    color: const Color(0xFF0284C7),
+                    onTap: () => Navigator.of(context).pushNamed('/ai-assistant'),
+                  ),
+                  _buildServiceCard(
+                    icon: Icons.healing_rounded,
+                    title: 'Mis Tratamientos',
+                    subtitle: 'Planes médicos y tomas CU17',
+                    color: const Color(0xFF0284C7),
+                    onTap: () =>
+                        Navigator.of(context).pushNamed('/tratamientos'),
+                  ),
+                  // CU19: pago de citas/teleconsultas y comprobantes digitales.
+                  _buildServiceCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Mis pagos',
+                    subtitle: 'Paga tus citas y descarga comprobantes',
+                    color: const Color(0xFF635BFF),
+                    onTap: () => Navigator.of(context).pushNamed('/pagos'),
+                  ),
                 ],
                 _buildServiceCard(
                   icon: Icons.calendar_month_rounded,
@@ -332,6 +361,13 @@ class HomeScreen extends StatelessWidget {
                   subtitle: 'Fila virtual del día CU08',
                   color: const Color(0xFF0D9488),
                   onTap: () => Navigator.of(context).pushNamed('/mi-cola'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.schedule_rounded,
+                  title: 'Mi Lista de Espera',
+                  subtitle: 'Inscripción y reasignación CU07',
+                  color: const Color(0xFF049CAB),
+                  onTap: () => Navigator.of(context).pushNamed('/lista-espera'),
                 ),
                 if (isPatient)
                   _buildServiceCard(

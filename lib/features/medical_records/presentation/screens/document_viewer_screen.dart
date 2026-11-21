@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:share_plus/share_plus.dart';
+import 'package:file_saver/file_saver.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
@@ -23,7 +25,6 @@ class DocumentViewerScreen extends StatefulWidget {
 class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
   Uint8List? _pdfBytes;
   bool _isDownloading = false;
-  String? _downloadError;
 
   @override
   void initState() {
@@ -51,22 +52,32 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
 
     setState(() {
       _isDownloading = true;
-      _downloadError = null;
     });
 
     try {
-      // En Flutter web, usamos la URL firmada para descargar
-      // Para móvil nativo, se guardaría en Downloads
-      await Share.shareXFiles([
-        XFile.fromData(
-          _pdfBytes!,
-          name: 'documento_clinico_${widget.documentId}.pdf',
-          mimeType: 'application/pdf',
-        ),
-      ], text: 'Documento clínico');
-    } catch (e) {
+      final bytes = _pdfBytes!;
+      if (bytes.isEmpty) throw StateError('El PDF está vacío.');
+      final name = 'documento_clinico_${widget.documentId}';
+      final saved = kIsWeb
+          ? await FileSaver.instance.saveFile(
+              name: name, bytes: bytes, fileExtension: 'pdf',
+              mimeType: MimeType.pdf,
+            )
+          : await FileSaver.instance.saveAs(
+              name: name, bytes: bytes, fileExtension: 'pdf',
+              mimeType: MimeType.pdf,
+            );
+      if (saved == null) return;
       if (mounted) {
-        setState(() => _downloadError = 'Error al descargar: $e');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('PDF guardado correctamente.')),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo guardar el PDF. Intenta nuevamente.')),
+        );
       }
     } finally {
       if (mounted) {
@@ -447,13 +458,14 @@ class _DocumentViewerScreenState extends State<DocumentViewerScreen> {
 
   Future<void> _handleShare() async {
     if (_pdfBytes == null) return;
-    await Share.shareXFiles([
-      XFile.fromData(
+    await SharePlus.instance.share(ShareParams(
+      files: [XFile.fromData(
         _pdfBytes!,
         name: 'documento_clinico_${widget.documentId}.pdf',
         mimeType: 'application/pdf',
-      ),
-    ], text: 'Documento clínico');
+      )],
+      text: 'Documento clínico',
+    ));
   }
 
   Color _getTipoColor(String tipo) {

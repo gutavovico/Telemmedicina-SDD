@@ -10,8 +10,12 @@ class DownloadDocumentUseCase {
   DownloadDocumentUseCase({ClinicalDocumentRepository? repository})
       : _repository = repository ?? ClinicalDocumentRepositoryImpl();
 
-  Future<Uint8List> call(int idDocumento) {
-    return _repository.downloadDocumentBytes(idDocumento);
+  Future<Uint8List> call(int idDocumento) async {
+    final bytes = await _repository.downloadDocumentBytes(idDocumento);
+    if (bytes.isEmpty) {
+      throw StateError('El servidor devolvió un documento vacío. Intenta nuevamente.');
+    }
+    return bytes;
   }
 }
 

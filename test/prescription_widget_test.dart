@@ -7,6 +7,7 @@ import 'package:provider/provider.dart';
 import 'package:mobile_telemedicina/core/theme/app_theme.dart';
 import 'package:mobile_telemedicina/features/auth/data/models/auth_models.dart';
 import 'package:mobile_telemedicina/features/auth/presentation/controllers/auth_controller.dart';
+import 'package:mobile_telemedicina/features/communications/presentation/providers/notificacion_provider.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/entities/prescription.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/repositories/prescription_repository.dart';
 import 'package:mobile_telemedicina/features/medical_records/domain/usecases/download_prescription_pdf_usecase.dart';
@@ -396,6 +397,9 @@ void main() {
               create: (_) => _TestAuthController('PACIENTE'),
             ),
             ChangeNotifierProvider(
+              create: (_) => NotificacionProvider(habilitarPolling: false),
+            ),
+            ChangeNotifierProvider(
               create: (_) => _providerWith(
                 FakeRepo()
                   ..listItems = []
@@ -426,8 +430,15 @@ void main() {
     ) async {
       for (final role in ['ADMIN', 'MEDICO']) {
         await tester.pumpWidget(
-          ChangeNotifierProvider<AuthController>(
-            create: (_) => _TestAuthController(role),
+          MultiProvider(
+            providers: [
+              ChangeNotifierProvider<AuthController>(
+                create: (_) => _TestAuthController(role),
+              ),
+              ChangeNotifierProvider(
+                create: (_) => NotificacionProvider(habilitarPolling: false),
+              ),
+            ],
             child: const MaterialApp(home: HomeScreen()),
           ),
         );

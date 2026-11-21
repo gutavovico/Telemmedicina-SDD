@@ -21,7 +21,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   final _emailController = TextEditingController();
 
   /// Canal de entrega del codigo (CU23). Solo email.
-  String _canal = 'email';
+  final String _canal = 'email';
 
   @override
   void dispose() {

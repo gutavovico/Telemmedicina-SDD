@@ -138,5 +138,20 @@ void main() {
       expect(user.isPatient, isTrue);
       expect(user.tenantId, '9');
     });
+
+    test('UserModel conserva la preferencia push desactivada del backend', () {
+      final user = UserModel.fromJson({
+        'id_usuario': 4,
+        'nombres': 'Paciente',
+        'apellidos': 'Prueba',
+        'correo': 'paciente@hospital.com',
+        'rol': 'PACIENTE',
+        'id_clinica': 9,
+        'notificaciones_push': false,
+      });
+
+      expect(user.notificacionesPush, isFalse);
+      expect(user.toJson()['notificaciones_push'], isFalse);
+    });
   });
 }
