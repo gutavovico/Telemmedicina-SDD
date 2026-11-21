@@ -37,6 +37,14 @@
           <p class="text-body-md font-body-md text-on-surface-variant">Emite tu ficha eligiendo especialidad y especialista.</p>
         </a>
         <a
+          routerLink="/especialistas"
+          class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#14B8A6] flex flex-col gap-2 group"
+        >
+          <span class="material-symbols-outlined text-2xl text-[#14B8A6]">person_search</span>
+          <h3 class="text-title-md font-title-md text-primary">Buscar especialistas</h3>
+          <p class="text-body-md font-body-md text-on-surface-variant">Encuentra por especialidad, modalidad, costo y disponibilidad.</p>
+        </a>
+        <a
           routerLink="/mis-documentos"
           class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#14B8A6] flex flex-col gap-2 group"
         >
@@ -53,12 +61,28 @@
           <p class="text-body-md font-body-md text-on-surface-variant">Visualiza y descarga tus recetas digitales.</p>
         </a>
         <a
+          routerLink="/tratamientos"
+          class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#14B8A6] flex flex-col gap-2 group"
+        >
+          <span class="material-symbols-outlined text-2xl text-[#14B8A6]">pill</span>
+          <h3 class="text-title-md font-title-md text-primary">Mis tratamientos</h3>
+          <p class="text-body-md font-body-md text-on-surface-variant">Consulta tu plan, tus medicamentos y el registro de dosis.</p>
+        </a>
+        <a
           routerLink="/mi-cola"
           class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#14B8A6] flex flex-col gap-2 group"
         >
           <span class="material-symbols-outlined text-2xl text-[#14B8A6]">hourglass_top</span>
           <h3 class="text-title-md font-title-md text-primary">Mi turno de hoy</h3>
           <p class="text-body-md font-body-md text-on-surface-variant">Tu posición y espera en la fila virtual.</p>
+        </a>
+        <a
+          routerLink="/mi-lista-espera"
+          class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#049CAB] flex flex-col gap-2 group"
+        >
+          <span class="material-symbols-outlined text-2xl text-[#049CAB]">schedule</span>
+          <h3 class="text-title-md font-title-md text-primary">Mi lista de espera</h3>
+          <p class="text-body-md font-body-md text-on-surface-variant">Inscríbete y recibe avisos cuando se libere un turno.</p>
         </a>
         @if (miPacienteId() !== null) {
           <button
@@ -78,6 +102,14 @@
             <span class="material-symbols-outlined text-2xl text-[#14B8A6]">emergency</span>
             <h3 class="text-title-md font-title-md text-primary">Consultas IA</h3>
             <p class="text-body-md font-body-md text-on-surface-variant">Evalúa tus síntomas de inmediato para sugerirte prioridad de atención.</p>
+          </a>
+          <a
+            routerLink="/ia-asistente"
+            class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#14B8A6] flex flex-col gap-2 group"
+          >
+            <span class="material-symbols-outlined text-2xl text-[#14B8A6]">psychology</span>
+            <h3 class="text-title-md font-title-md text-primary">Asistencia Inteligente</h3>
+            <p class="text-body-md font-body-md text-on-surface-variant">Revisa interacciones de tus medicamentos y recomendaciones de cuidado.</p>
           </a>
       </div>
     </section>

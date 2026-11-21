@@ -29,27 +29,39 @@ export class TenantService {
   readonly isClinicaActiva = computed(() => {
     const estado = this.currentTenant()?.clinica_estado;
     if (this.isSuperAdmin() && !this.clinicaId()) return true; // Super admin global view is active
-    return estado === 'ACTIVO';
+    return estado === 'ACTIVO' || estado === 'ACTIVE';
   });
   readonly permisos = computed(() => this.currentTenant()?.permisos ?? []);
 
   constructor() {
     if (this.isBrowser && localStorage.getItem('access_token')) {
-      this.loadTenantContext().subscribe();
+      // Los interceptores vuelven a inyectar TenantService y AuthService.
+      queueMicrotask(() => {
+        if (this.contextoVersion === 0 && localStorage.getItem('access_token')) {
+          this.loadTenantContext().subscribe();
+        }
+      });
     }
   }
 
+  private contextoVersion = 0;
+
+  obtenerLogo() {
+    return this.http.get(`${this.apiUrl}/api/v1/tenant/marca/logo`, { responseType: 'blob' });
+  }
+
   loadTenantContext(): Observable<TenantContext | null> {
+    const version = ++this.contextoVersion;
     return this.http.get<TenantContext>(`${this.apiUrl}/api/v1/tenant/context`).pipe(
       tap((context) => {
-        this.saveTenantContext(context);
+        if (version === this.contextoVersion) this.saveTenantContext(context);
       }),
       catchError((error) => {
-        if (error?.status === 403) {
+        if (version === this.contextoVersion && error?.status === 403) {
           // Clinic is inactive
           const current = this.currentTenant();
           if (current) {
-            this.currentTenant.set({ ...current, clinica_estado: 'INACTIVO' });
+            this.currentTenant.set({ ...current, marca: null, tema: null, clinica_estado: 'INACTIVO' });
           }
         }
         return of(null);
@@ -58,6 +70,12 @@ export class TenantService {
   }
 
   setSuperAdminTenant(clinicaId: number | null): Observable<TenantContext | null> {
+    this.setSelectedTenant(clinicaId);
+    return this.loadTenantContext();
+  }
+
+  setSelectedTenant(clinicaId: number | null): void {
+    this.currentTenant.update(c => c && { ...c, marca: null, tema: null });
     this.selectedTenantId.set(clinicaId);
     if (this.isBrowser) {
       if (clinicaId !== null) {
@@ -66,17 +84,17 @@ export class TenantService {
         localStorage.removeItem(this.SELECTED_TENANT_ID_KEY);
       }
     }
-    return this.loadTenantContext();
   }
 
   saveTenantContext(context: TenantContext): void {
     this.currentTenant.set(context);
     if (this.isBrowser) {
-      localStorage.setItem(this.TENANT_CONTEXT_KEY, JSON.stringify(context));
+      localStorage.setItem(this.TENANT_CONTEXT_KEY, JSON.stringify({ ...context, marca: null, tema: null }));
     }
   }
 
   clearTenant(): void {
+    ++this.contextoVersion;
     this.currentTenant.set(null);
     this.selectedTenantId.set(null);
     if (this.isBrowser) {
@@ -89,7 +107,7 @@ export class TenantService {
     if (!this.isBrowser) return null;
     try {
       const raw = localStorage.getItem(this.TENANT_CONTEXT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? { ...JSON.parse(raw), marca: null, tema: null } : null;
     } catch {
       return null;
     }

@@ -1,0 +1,112 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-4xl space-y-6">
+    <nav aria-label="Ruta de navegación" class="flex items-center gap-2 text-sm">
+      <a routerLink="/admin/resultados-laboratorio" class="inline-flex items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1.5 font-medium text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+        Resultados de laboratorio
+      </a>
+    </nav>
+
+    @if (cargando()) {
+      <p class="rounded-2xl border border-[#E8EDF4] bg-white p-8 text-center text-sm text-gray-500" role="status" data-testid="cargando">Cargando resultado…</p>
+    } @else if (error(); as mensaje) {
+      <div class="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-sm text-rose-800" role="alert" data-testid="error-detalle">{{ mensaje }}</div>
+    } @else if (resultado(); as r) {
+      <header class="flex flex-col gap-3 rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 class="text-2xl font-bold text-[#293954]">{{ r.nombre_examen || r.codigo_examen }}</h1>
+          <p class="text-sm text-gray-500">{{ r.paciente_nombre || 'Sin paciente asignado' }} · {{ r.laboratorio_origen }}</p>
+        </div>
+        <app-lab-result-status-badge [estado]="r.estado" />
+      </header>
+
+      @if (r.estado === 'PENDIENTE_REVISION' && r.motivo_pendiente) {
+        <section class="rounded-2xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900" aria-label="Motivo por el que está pendiente">
+          <h2 class="font-semibold">Pendiente de revisión</h2>
+          <p class="mt-1" data-testid="motivo-pendiente">{{ motivos[r.motivo_pendiente] || r.motivo_pendiente }}</p>
+          @if (acceso.puedeRevisar()) {
+            <a routerLink="/admin/resultados-laboratorio/revision" class="mt-2 inline-block font-semibold underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-amber-700">Ir a la revisión de pendientes</a>
+          }
+        </section>
+      }
+
+      <section class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm" aria-label="Datos del resultado">
+        <dl class="grid grid-cols-1 gap-x-8 gap-y-4 text-sm sm:grid-cols-2">
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Paciente</dt><dd class="text-[#293954]">{{ r.paciente_nombre || 'Sin paciente asignado' }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Estudio</dt><dd class="text-[#293954]">{{ r.nombre_examen || '—' }} ({{ r.codigo_examen }})</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Laboratorio de origen</dt><dd class="text-[#293954]">{{ r.laboratorio_origen }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Fecha de realización</dt><dd class="text-[#293954]">{{ r.fecha_realizacion }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Origen</dt><dd class="text-[#293954]">{{ r.origen === 'MANUAL' ? 'Carga manual' : 'Sincronizado' }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Orden de laboratorio</dt><dd class="text-[#293954]">{{ r.id_orden ?? 'Sin orden asociada' }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Archivo</dt><dd class="text-[#293954]">{{ r.nombre_archivo }} · {{ r.content_type }} · {{ formatearTamano(r.tamano_bytes) }}</dd></div>
+          <div><dt class="text-xs font-semibold uppercase text-gray-500">Registrado</dt><dd class="text-[#293954]">{{ r.registrado_en || '—' }} por {{ r.registrado_por_nombre || r.proceso || '—' }}</dd></div>
+          @if (r.origen === 'SINCRONIZADO') {
+            <div><dt class="text-xs font-semibold uppercase text-gray-500">Fuente</dt><dd class="text-[#293954]">{{ r.fuente_codigo || '—' }}</dd></div>
+            <div><dt class="text-xs font-semibold uppercase text-gray-500">Identificador externo</dt><dd class="text-[#293954]">{{ r.id_externo || '—' }}</dd></div>
+          }
+          @if (r.resuelto_en) {
+            <div><dt class="text-xs font-semibold uppercase text-gray-500">Resuelto / anulado</dt><dd class="text-[#293954]">{{ r.resuelto_en }}</dd></div>
+            <div><dt class="text-xs font-semibold uppercase text-gray-500">Motivo</dt><dd class="text-[#293954]" data-testid="motivo-resolucion">{{ r.motivo_resolucion || '—' }}</dd></div>
+          }
+          @if (r.hash_archivo) {
+            <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase text-gray-500">SHA-256</dt><dd class="break-all font-mono text-xs text-gray-600">{{ r.hash_archivo }}</dd></div>
+          }
+          @if (r.observaciones) {
+            <div class="sm:col-span-2"><dt class="text-xs font-semibold uppercase text-gray-500">Observaciones</dt><dd class="whitespace-pre-line text-[#293954]" data-testid="observaciones">{{ r.observaciones }}</dd></div>
+          }
+        </dl>
+        @if (acceso.puedeRevisar() && clavesCorrespondencia(r).length > 0) {
+          <div class="mt-5 border-t border-[#E8EDF4] pt-4">
+            <h2 class="text-xs font-semibold uppercase text-gray-500">Datos recibidos de la fuente</h2>
+            <ul class="mt-1 text-sm text-[#293954]" data-testid="datos-correspondencia">
+              @for (par of clavesCorrespondencia(r); track par[0]) {
+                <li><span class="text-gray-500">{{ par[0] }}:</span> {{ par[1] }}</li>
+              }
+            </ul>
+          </div>
+        }
+      </section>
+
+      @if (r.estado === 'INCORPORADO') {
+        <section class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm" aria-label="Archivo">
+          <h2 class="mb-3 text-lg font-semibold text-[#293954]">Archivo del resultado</h2>
+          @if (acceso.puedeDescargar()) {
+            <app-lab-result-file-viewer [idResultado]="r.id_resultado" />
+          } @else {
+            <p class="rounded-xl border border-gray-200 bg-gray-50 p-3 text-sm text-gray-600" data-testid="sin-descarga">
+              Su perfil puede consultar los datos del resultado, pero no ver ni descargar el archivo.
+            </p>
+          }
+        </section>
+
+        @if (acceso.puedeRevisar()) {
+          <section class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm" aria-label="Anular resultado">
+            @if (!panelAnular()) {
+              <button type="button" (click)="abrirAnulacion()" data-testid="btn-anular"
+                class="inline-flex items-center gap-2 rounded-xl border border-rose-300 px-4 py-2 text-sm font-semibold text-rose-700 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">
+                <span class="material-symbols-outlined text-[18px]" aria-hidden="true">block</span>
+                Anular resultado
+              </button>
+            } @else {
+              <form (submit)="$event.preventDefault(); confirmarAnulacion()" class="space-y-3" novalidate>
+                <p class="text-sm text-gray-600">La anulación es una baja lógica: el resultado deja de mostrarse en el expediente y se conserva el archivo.</p>
+                <label for="motivo-anulacion" class="block text-sm font-medium text-[#293954]">Motivo de la anulación <span class="text-rose-600" aria-hidden="true">*</span></label>
+                <textarea id="motivo-anulacion" rows="3" maxlength="500" [formControl]="motivo"
+                  class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-500"
+                  [attr.aria-invalid]="errorAnulacion() ? 'true' : null" aria-describedby="error-anulacion"></textarea>
+                <p id="error-anulacion" class="min-h-[1.25rem] text-xs text-rose-700" role="alert" aria-live="assertive" data-testid="error-anulacion">{{ errorAnulacion() }}</p>
+                <div class="flex gap-3">
+                  <button type="submit" [disabled]="anulando()" data-testid="btn-confirmar-anulacion"
+                    class="rounded-xl bg-rose-600 px-4 py-2 text-sm font-semibold text-white disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-600">
+                    {{ anulando() ? 'Anulando…' : 'Confirmar anulación' }}
+                  </button>
+                  <button type="button" (click)="panelAnular.set(false)" class="rounded-xl border border-[#D5DDE8] px-4 py-2 text-sm text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Cancelar</button>
+                </div>
+              </form>
+            }
+          </section>
+        }
+      }
+    }
+  </div>
+</main>

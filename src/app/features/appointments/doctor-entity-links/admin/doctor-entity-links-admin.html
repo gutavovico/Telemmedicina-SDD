@@ -1,0 +1,152 @@
+<div class="min-h-screen bg-[#F0F5FB] pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+  <main class="max-w-container-max mx-auto space-y-6 min-w-0">
+    <header class="bg-white rounded-3xl border border-[#E8EDF4] shadow-sm p-5 sm:p-7">
+      <h1 class="text-2xl sm:text-3xl font-bold text-[#293954]">Vincular médicos con la entidad</h1>
+      <p class="mt-2 text-sm text-gray-500">Invita profesionales, define sus roles y controla su participación.</p>
+    </header>
+    @if (successMessage()) { <div role="status" class="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">{{ successMessage() }}</div> }
+    @if (errorMessage()) { <div role="alert" class="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">{{ errorMessage() }}</div> }
+
+    <section class="bg-white rounded-3xl border border-[#E8EDF4] shadow-sm p-5 sm:p-6 min-w-0">
+      <h2 class="text-lg font-bold text-[#293954]">Invitar un médico</h2>
+      <form [formGroup]="candidateForm" (ngSubmit)="searchCandidate()" class="mt-4 grid grid-cols-1 md:grid-cols-[220px_1fr_auto] gap-3 items-end">
+        <label class="text-sm font-semibold text-gray-700">Criterio exacto
+          <select formControlName="criterio" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2.5 bg-white">
+            <option value="correo">Correo</option><option value="documento_identidad">Documento</option><option value="matricula_profesional">Matrícula</option>
+          </select>
+        </label>
+        <label class="text-sm font-semibold text-gray-700">Valor
+          <input formControlName="valor" class="mt-1 w-full min-w-0 rounded-xl border border-gray-200 px-3 py-2.5" placeholder="coincidencia exacta" />
+        </label>
+        <button type="submit" [disabled]="candidateLoading()" class="rounded-xl bg-primary text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60">{{ candidateLoading() ? 'Buscando...' : 'Buscar' }}</button>
+      </form>
+      @if (candidateError()) { <p role="alert" class="mt-3 text-sm text-rose-700">{{ candidateError() }}</p> }
+      @if (candidate(); as found) {
+        <div class="mt-4 rounded-2xl border border-blue-100 bg-blue-50 p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div class="min-w-0"><p class="font-semibold text-[#293954] truncate">{{ found.nombres }} {{ found.apellidos }}</p><p class="text-sm text-gray-600 truncate">{{ found.correo }} · {{ found.matricula_profesional || 'Sin matrícula' }}</p></div>
+          <span class="text-xs font-semibold text-blue-700">{{ found.existe_perfil ? 'Perfil existente' : 'Sin perfil profesional' }}</span>
+        </div>
+      }
+
+      <form [formGroup]="inviteForm" (ngSubmit)="invite()" class="mt-6 space-y-5 border-t border-gray-100 pt-5">
+        <div class="flex flex-wrap gap-4">
+          <label class="inline-flex items-center gap-2 text-sm font-semibold"><input type="radio" formControlName="modo" value="EXISTENTE" /> Médico existente</label>
+          <label class="inline-flex items-center gap-2 text-sm font-semibold"><input type="radio" formControlName="modo" value="NUEVO" /> Crear cuenta nueva</label>
+        </div>
+        @if (inviteForm.controls.modo.value === 'NUEVO') {
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            <input formControlName="nombres" placeholder="Nombres" class="rounded-xl border border-gray-200 px-3 py-2.5" />
+            <input formControlName="apellidos" placeholder="Apellidos" class="rounded-xl border border-gray-200 px-3 py-2.5" />
+            <input formControlName="correo" type="email" placeholder="Correo" class="rounded-xl border border-gray-200 px-3 py-2.5" />
+            <input formControlName="telefono" placeholder="Teléfono (opcional)" class="rounded-xl border border-gray-200 px-3 py-2.5" />
+            <input formControlName="documento_identidad" placeholder="Documento (opcional)" class="rounded-xl border border-gray-200 px-3 py-2.5" />
+          </div>
+        }
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+          <fieldset class="rounded-2xl border border-gray-200 p-4 min-w-0">
+            <legend class="px-1 text-sm font-bold text-[#293954]">Roles</legend>
+            <div class="flex flex-wrap gap-3">
+              @for (role of roles(); track role.id_rol) { <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" [checked]="inviteForm.controls.roles.value.includes(role.id_rol)" (change)="toggleRole(role.id_rol, $any($event.target).checked)" /> {{ role.nombre }}</label> }
+            </div>
+            <select formControlName="idRolPrincipal" class="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"><option [ngValue]="0">Rol principal</option>@for (role of roles(); track role.id_rol) { <option [ngValue]="role.id_rol">{{ role.nombre }}</option> }</select>
+          </fieldset>
+          <fieldset class="rounded-2xl border border-gray-200 p-4 min-w-0">
+            <legend class="px-1 text-sm font-bold text-[#293954]">Especialidades</legend>
+            <div class="flex flex-wrap gap-3">
+              @for (specialty of specialties(); track specialty.id_especialidad) { <label class="inline-flex items-center gap-2 text-sm"><input type="checkbox" [checked]="inviteForm.controls.especialidades.value.includes(specialty.id_especialidad)" (change)="toggleSpecialty(specialty.id_especialidad, $any($event.target).checked)" /> {{ specialty.nombre }}</label> }
+            </div>
+            <select formControlName="idEspecialidadPrincipal" class="mt-4 w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm"><option [ngValue]="0">Especialidad principal</option>@for (specialty of specialties(); track specialty.id_especialidad) { <option [ngValue]="specialty.id_especialidad">{{ specialty.nombre }}</option> }</select>
+          </fieldset>
+        </div>
+        <button type="submit" [disabled]="submitting()" class="rounded-xl bg-secondary text-primary px-5 py-3 text-sm font-bold disabled:opacity-60">{{ submitting() ? 'Creando...' : 'Enviar invitación' }}</button>
+      </form>
+    </section>
+
+    <section class="bg-white rounded-3xl border border-[#E8EDF4] shadow-sm p-5 sm:p-6 min-w-0">
+      <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <div><h2 class="text-lg font-bold text-[#293954]">Vínculos de la entidad</h2><p class="text-sm text-gray-500 mt-1">Solo ACTIVO concede acceso operativo.</p></div>
+        <div class="grid grid-cols-1 sm:grid-cols-[180px_1fr_auto] gap-2 w-full lg:w-auto">
+          <select [ngModel]="stateFilter()" (ngModelChange)="stateFilter.set($event)" class="rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white"><option value="">Todos los estados</option><option value="INVITADO">Invitado</option><option value="ACTIVO">Activo</option><option value="SUSPENDIDO">Suspendido</option><option value="RECHAZADO">Rechazado</option><option value="BAJA">Baja</option></select>
+          <input [ngModel]="query()" (ngModelChange)="query.set($event)" (keyup.enter)="applyFilters()" placeholder="Nombre o correo" class="rounded-xl border border-gray-200 px-3 py-2 text-sm min-w-0" />
+          <button type="button" (click)="applyFilters()" class="rounded-xl bg-primary text-white px-4 py-2 text-sm font-semibold">Filtrar</button>
+        </div>
+      </div>
+      @if (loading()) {
+        <div class="py-12 text-center text-sm text-gray-500"><span class="material-symbols-outlined animate-spin">progress_activity</span> Cargando vínculos...</div>
+      } @else if (links().length === 0) {
+        <div class="py-12 text-center"><span class="material-symbols-outlined text-gray-300 text-5xl">medical_information</span><p class="mt-3 font-semibold text-gray-700">No hay vínculos para mostrar</p><p class="text-sm text-gray-500">Ajusta los filtros o envía una invitación.</p></div>
+      } @else {
+        <div class="mt-5 overflow-x-auto">
+          <table class="w-full min-w-[820px] text-left text-sm">
+            <thead class="text-xs uppercase text-gray-500"><tr><th class="p-3">Médico</th><th class="p-3">Estado</th><th class="p-3">Roles</th><th class="p-3">Perfil</th><th class="p-3 text-right">Acciones</th></tr></thead>
+            <tbody class="divide-y divide-gray-100">
+              @for (link of links(); track link.id_vinculacion) {
+                <tr>
+                  <td class="p-3"><p class="font-semibold text-[#293954]">{{ link.nombres }} {{ link.apellidos }}</p><p class="text-xs text-gray-500">{{ link.correo }}</p></td>
+                  <td class="p-3"><span class="rounded-full px-2.5 py-1 text-xs font-bold" [class]="link.estado === 'ACTIVO' ? 'bg-emerald-50 text-emerald-700' : link.estado === 'SUSPENDIDO' ? 'bg-amber-50 text-amber-700' : link.estado === 'INVITADO' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-600'">{{ link.estado }}</span></td>
+                  <td class="p-3">{{ link.roles.length ? link.roles[0].nombre : 'Sin roles' }}</td>
+                  <td class="p-3">{{ link.existe_perfil ? 'Disponible' : 'Pendiente' }}</td>
+                  <td class="p-3 text-right"><button type="button" (click)="openDetail(link)" class="rounded-lg border border-gray-200 px-3 py-2 text-xs font-semibold hover:border-primary">Ver detalle</button></td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <div class="mt-5 flex items-center justify-between"><button type="button" (click)="previousPage()" [disabled]="page() === 1" class="rounded-xl border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">Anterior</button><span class="text-sm text-gray-600">Página {{ page() }} de {{ totalPages() }}</span><button type="button" (click)="nextPage()" [disabled]="page() === totalPages()" class="rounded-xl border border-gray-200 px-3 py-2 text-sm disabled:opacity-40">Siguiente</button></div>
+      }
+    </section>
+  </main>
+
+  @if (credential(); as temp) {
+    <div class="fixed inset-0 z-[80] bg-slate-950/50 px-4 py-8 overflow-y-auto">
+      <div role="alertdialog" aria-modal="true" class="max-w-lg mx-auto rounded-3xl bg-white p-6 shadow-2xl">
+        <h2 class="text-xl font-bold text-[#293954]">Credencial temporal</h2><p class="mt-2 text-sm text-gray-600">Se muestra una sola vez. Compártela mediante un canal seguro.</p>
+        <dl class="mt-5 space-y-3 rounded-2xl bg-amber-50 p-4 text-sm"><div><dt class="font-semibold">Correo</dt><dd class="break-all">{{ temp.correo }}</dd></div><div><dt class="font-semibold">Contraseña</dt><dd class="break-all font-mono">{{ temp.password_temporal }}</dd></div><div><dt class="font-semibold">Expira</dt><dd>{{ temp.expira_en }}</dd></div></dl>
+        <button type="button" (click)="dismissCredential()" class="mt-5 w-full rounded-xl bg-primary text-white px-4 py-3 font-semibold">Entendido, ocultar credencial</button>
+      </div>
+    </div>
+  }
+
+
+  @if (detail(); as link) {
+    <div class="fixed inset-0 z-[70] bg-slate-950/45 px-4 py-6 overflow-y-auto">
+      <div class="max-w-3xl mx-auto rounded-3xl bg-white p-5 sm:p-7 shadow-2xl">
+        <div class="flex items-start justify-between gap-4"><div><h2 class="text-xl font-bold text-[#293954]">{{ link.nombres }} {{ link.apellidos }}</h2><p class="text-sm text-gray-500">{{ link.correo }} · versión {{ link.row_version }}</p></div><button type="button" (click)="closeDetail()" aria-label="Cerrar detalle" class="material-symbols-outlined">close</button></div>
+        @if (actionError()) { <p role="alert" class="mt-4 rounded-xl bg-rose-50 text-rose-700 p-3 text-sm">{{ actionError() }}</p> }
+        <div class="mt-5 flex flex-wrap gap-2">
+          @if (canSuspend(link)) { <button type="button" (click)="requestAction(link, 'SUSPENDIDO')" class="rounded-xl bg-amber-100 text-amber-800 px-3 py-2 text-sm font-semibold">Suspender</button> }
+          @if (canReactivate(link)) { <button type="button" (click)="requestAction(link, 'ACTIVO')" class="rounded-xl bg-emerald-100 text-emerald-800 px-3 py-2 text-sm font-semibold">Reactivar</button> }
+          @if (canDeactivate(link)) { <button type="button" (click)="requestAction(link, 'BAJA')" class="rounded-xl bg-rose-100 text-rose-700 px-3 py-2 text-sm font-semibold">Dar de baja</button> }
+          <button type="button" (click)="editAssignments()" class="rounded-xl bg-blue-50 text-blue-700 px-3 py-2 text-sm font-semibold">Reemplazar asignaciones</button>
+        </div>
+        <form [formGroup]="assignmentForm" (ngSubmit)="saveAssignments()" class="mt-5 rounded-2xl border border-gray-200 p-4 space-y-4">
+          <h3 class="font-bold text-[#293954]">Roles y especialidades</h3>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <fieldset><legend class="text-sm font-semibold">Roles</legend>@for (role of roles(); track role.id_rol) { <label class="mr-3 inline-flex items-center gap-1 text-sm"><input type="checkbox" [checked]="assignmentForm.controls.roles.value.includes(role.id_rol)" (change)="toggleAssignmentRole(role.id_rol, $any($event.target).checked)" />{{ role.nombre }}</label> }</fieldset>
+            <fieldset><legend class="text-sm font-semibold">Especialidades</legend>@for (specialty of specialties(); track specialty.id_especialidad) { <label class="mr-3 inline-flex items-center gap-1 text-sm"><input type="checkbox" [checked]="assignmentForm.controls.especialidades.value.includes(specialty.id_especialidad)" (change)="toggleAssignmentSpecialty(specialty.id_especialidad, $any($event.target).checked)" />{{ specialty.nombre }}</label> }</fieldset>
+          </div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-3"><select formControlName="idRolPrincipal" class="rounded-xl border border-gray-200 px-3 py-2"><option [ngValue]="0">Rol principal</option>@for (role of roles(); track role.id_rol) { <option [ngValue]="role.id_rol">{{ role.nombre }}</option> }</select><select formControlName="idEspecialidadPrincipal" class="rounded-xl border border-gray-200 px-3 py-2"><option [ngValue]="0">Especialidad principal</option>@for (specialty of specialties(); track specialty.id_especialidad) { <option [ngValue]="specialty.id_especialidad">{{ specialty.nombre }}</option> }</select></div>
+          <button type="submit" [disabled]="actionLoading()" class="rounded-xl bg-primary text-white px-4 py-2.5 text-sm font-semibold disabled:opacity-60">Guardar reemplazo</button>
+        </form>
+        <h3 class="mt-6 font-bold text-[#293954]">Historial</h3>
+        @if (detailLoading()) { <p class="mt-2 text-sm text-gray-500">Cargando historial...</p> } @else if (history().length === 0) { <p class="mt-2 text-sm text-gray-500">Sin eventos de historial.</p> } @else {
+          <ol class="mt-3 space-y-3 border-l border-gray-200 pl-4">@for (event of history(); track event.id_historial) { <li class="text-sm"><p class="font-semibold">{{ event.tipo_evento }} · {{ event.estado_anterior || '—' }} → {{ event.estado_nuevo || '—' }}</p><p class="text-gray-500">{{ event.nombre_actor || 'Actor' }} · {{ event.fecha_cambio }}</p>@if (event.motivo) { <p class="text-gray-600">Motivo: {{ event.motivo }}</p> }</li> }</ol>
+        }
+      </div>
+    </div>
+  }
+
+  @if (pendingAction(); as pending) {
+    <div class="fixed inset-0 z-[90] bg-slate-950/50 px-4 py-8">
+      <form [formGroup]="actionForm" (ngSubmit)="confirmAction()" role="alertdialog" aria-modal="true" class="max-w-md mx-auto rounded-3xl bg-white p-6">
+        <h2 class="text-xl font-bold text-[#293954]">Confirmar {{ pending.action }}</h2><p class="mt-2 text-sm text-gray-600">La operación enviará la versión actual del vínculo.</p>
+        @if (pending.action !== 'ACTIVO') {
+          <label class="mt-4 block text-sm font-semibold">Motivo (3–500 caracteres)<textarea formControlName="motivo" rows="3" class="mt-1 w-full rounded-xl border border-gray-200 px-3 py-2"></textarea></label>
+          @if (actionForm.controls.motivo.touched && actionForm.controls.motivo.invalid) { <p class="mt-1 text-xs text-rose-600">Ingresa un motivo válido.</p> }
+        }
+        <div class="mt-5 flex flex-col-reverse sm:flex-row justify-end gap-2"><button type="button" (click)="cancelAction()" [disabled]="actionLoading()" class="rounded-xl border border-gray-200 px-4 py-2.5 font-semibold">Cancelar</button><button type="submit" [disabled]="actionLoading()" class="rounded-xl bg-primary text-white px-4 py-2.5 font-semibold disabled:opacity-60">{{ actionLoading() ? 'Procesando...' : 'Confirmar' }}</button></div>
+      </form>
+    </div>
+  }
+</div>
+

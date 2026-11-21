@@ -13,6 +13,7 @@ import {
   ForgotPasswordRequest,
   ForgotPasswordResponse,
   ResetPasswordRequest,
+  ChangeTemporaryPasswordRequest,
   AppRole,
   normalizeAppRole,
 } from '../models/auth.models';
@@ -38,6 +39,7 @@ export class AuthService {
   readonly isAuthenticated = signal<boolean>(this.hasValidToken());
   readonly currentUser = signal<UsuarioResponse | null>(this.getStoredUser());
   readonly profileVerified = signal<boolean>(false);
+  readonly mustChangePassword = signal<boolean>(false);
 
   // Perfil médico del usuario autenticado (CU04): 200 en /medicos/me = es doctor.
   // Se carga tras el login y al revalidar la sesión.
@@ -115,10 +117,13 @@ export class AuthService {
   });
 
   constructor() {
-    // If authenticated on initial load, fetch the fresh user profile
+    // Si hay una sesión activa, primero obtener el rol oficial y después
+    // consultar el perfil médico solo cuando corresponda. Así se evita el
+    // 404 esperado de /medicos/me para ADMIN, PACIENTE y RECEPCION.
     if (this.isBrowser && this.hasValidToken()) {
-      this.fetchUserProfile().subscribe();
-      this.fetchPerfilMedico();
+      this.fetchUserProfile().subscribe((user) => {
+        if (user) this.fetchPerfilMedico();
+      });
       // Reanuda el control de inactividad con la preferencia guardada (CU23)
       this.inactivity.start(this.getRememberMe());
     }
@@ -129,13 +134,24 @@ export class AuthService {
 
   /**
    * Carga el perfil médico del usuario autenticado (CU04).
-   * Si /medicos/me responde 200, el usuario es doctor; 404 = no lo es.
+   *
+   * ADMIN, PACIENTE y RECEPCION no pueden tener un perfil médico. Para evitar
+   * una solicitud que el backend responde con 404, solo se consulta cuando el
+   * rol es MEDICO o aún no se pudo determinar. Un 404 para un médico significa
+   * que todavía debe completar su perfil profesional.
    */
   fetchPerfilMedico(): void {
     if (!this.getAccessToken()) {
       this.perfilMedico.set(null);
       return;
     }
+
+    const role = this.userRole();
+    if (role !== 'doctor' && role !== 'unknown') {
+      this.perfilMedico.set(null);
+      return;
+    }
+
     this.http.get<MedicoResponse>(`${this.apiUrl}/medicos/me`).subscribe({
       next: (perfil) => this.perfilMedico.set(perfil),
       error: () => this.perfilMedico.set(null),
@@ -166,7 +182,9 @@ export class AuthService {
     const payload: LoginRequest = { correo, password };
     return this.http.post<TokenResponse>(`${this.apiUrl}/auth/login`, payload).pipe(
       tap((response) => {
+        this.tenantService.clearTenant();
         this.saveTokens(response.access_token, response.refresh_token, rememberMe);
+        this.mustChangePassword.set(!!response.must_change_password);
 
         // Initial fallback user from email until backend profile loads
         if (!this.currentUser()) {
@@ -179,16 +197,20 @@ export class AuthService {
           };
           this.saveUser(fallbackUser);
         }
-        // Cargar perfil médico (define el rol doctor, CU04)
-        this.fetchPerfilMedico();
       }),
-      switchMap(() => {
+      switchMap((response) => {
+        if (response.must_change_password) return of(null);
         return forkJoin({
-          profile: this.fetchUserProfile().pipe(catchError(() => of(null))),
+          profile: this.fetchUserProfile().pipe(
+            catchError(() => of(null)),
+            tap((user) => {
+              if (user) this.fetchPerfilMedico();
+            }),
+          ),
           tenant: this.tenantService.loadTenantContext().pipe(catchError(() => of(null))),
         });
       }),
-      map((res) => res.tenant),
+      map((res) => res?.tenant ?? null),
     );
   }
 
@@ -198,7 +220,7 @@ export class AuthService {
     const role = (tenant?.rol || this.currentUser()?.rol || '').toUpperCase();
 
     if (tenant?.es_super_admin || role.includes('SUPER')) {
-      this.router.navigate(['/admin/clinicas']);
+      this.router.navigate(['/admin/tenants']);
       return;
     }
     if (role.includes('ADMIN')) {
@@ -228,6 +250,20 @@ export class AuthService {
   ): Observable<{ detail: string }> {
     const payload: ResetPasswordRequest = { correo, codigo, nueva_password: nuevaPassword };
     return this.http.post<{ detail: string }>(`${this.apiUrl}/auth/reset-password`, payload);
+  }
+
+  changeTemporaryPassword(
+    nuevaPassword: string,
+    confirmarPassword: string,
+  ): Observable<{ detail: string }> {
+    const payload: ChangeTemporaryPasswordRequest = {
+      nueva_password: nuevaPassword,
+      confirmar_password: confirmarPassword,
+    };
+    return this.http.post<{ detail: string }>(
+      `${this.apiUrl}/auth/change-temporary-password`,
+      payload,
+    );
   }
 
   fetchUserProfile(): Observable<UsuarioResponse | null> {
@@ -291,26 +327,28 @@ export class AuthService {
   }
 
   logout(): void {
-    const refreshToken = this.getRefreshToken();
-    this.inactivity.stop();
-
-    const request$: Observable<unknown> = refreshToken
-      ? this.http.post(`${this.apiUrl}/auth/logout`, { refresh_token: refreshToken })
-      : of(null);
-
-    request$
-      .pipe(
-        catchError(() => of(null)),
-        finalize(() => {
-          this.clearTokens();
-          this.router.navigate(['/login']);
-        }),
-      )
-      .subscribe();
+    this.logoutRemoto();
   }
 
   logoutRemoto(): void {
-    this.logout();
+    const refreshToken = this.getRefreshToken();
+    this.inactivity.stop();
+
+    if (refreshToken) {
+      this.http
+        .post(`${this.apiUrl}/auth/logout`, { refresh_token: refreshToken })
+        .pipe(catchError(() => of(null)))
+        .subscribe();
+    }
+
+    this.clearTokens();
+    this.router.navigate(['/login']);
+  }
+
+  /** Descarta una sesión inválida sin encadenar otra petición de autenticación. */
+  logoutLocal(): void {
+    this.clearTokens();
+    this.router.navigate(['/login']);
   }
 
   onSessionClosedByInactivity(): void {
@@ -330,7 +368,80 @@ export class AuthService {
       this.perfilMedico.set(null);
       this.tenantService.clearTenant();
       this.inactivity.stop();
+
+      // Purgar cualquier dato clínico de CU17 en sessionStorage y localStorage (CU17 / CU23)
+      this.purgeClinicalData();
     }
+  }
+
+  /**
+   * Elimina cualquier dato clínico de CU17 retenido en sessionStorage y localStorage.
+   * Purga notas, horas efectivas y payloads clínicos al cerrar la sesión,
+   * preservando únicamente los marcadores mínimos opacos (cu17_recovery_*).
+   */
+  private purgeClinicalData(): void {
+    const isClinicalEntry = (key: string, rawVal: string | null): boolean => {
+      // Claves de operación pendiente de dosis
+      if (key.startsWith('pending_dose_')) return true;
+
+      // El marcador mínimo de recuperación opaco (sin payload ni datos clínicos) se preserva
+      if (key.startsWith('cu17_recovery_')) return false;
+
+      // Claves de sistema a preservar
+      if (
+        key === 'access_token' ||
+        key === 'refresh_token' ||
+        key === 'user_profile' ||
+        key === 'remember_me' ||
+        key.startsWith('tenant_') ||
+        key.startsWith('selected_tenant_')
+      ) {
+        return false;
+      }
+
+      if (!rawVal) return false;
+
+      // Detectar contenido con datos clínicos legibles o campos de carga clínica
+      const lower = rawVal.toLowerCase();
+      return (
+        lower.includes('"payload"') ||
+        lower.includes('"nota"') ||
+        lower.includes('"efectiva_en"') ||
+        lower.includes('"raw_hora_efectiva"') ||
+        lower.includes('"medicamento_nombre"') ||
+        lower.includes('"indicaciones"')
+      );
+    };
+
+    try {
+      if (typeof window !== 'undefined' && window.sessionStorage) {
+        const sessionKeys: string[] = [];
+        for (let i = 0; i < sessionStorage.length; i++) {
+          const k = sessionStorage.key(i);
+          if (k) sessionKeys.push(k);
+        }
+        for (const k of sessionKeys) {
+          if (isClinicalEntry(k, sessionStorage.getItem(k))) {
+            sessionStorage.removeItem(k);
+          }
+        }
+      }
+    } catch {}
+
+    try {
+      if (typeof window !== 'undefined' && window.localStorage) {
+        const localKeys: string[] = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k) localKeys.push(k);
+        }
+        for (const k of localKeys) {
+          if (isClinicalEntry(k, localStorage.getItem(k))) {
+            localStorage.removeItem(k);
+          }
+        }
+      }
+    } catch {}
   }
 
   getRememberMe(): boolean {
