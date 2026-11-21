@@ -319,6 +319,16 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Fila Virtual del Día',
       },
       {
+        path: 'lista-espera',
+        canActivate: [staffGuard, permissionsGuard],
+        data: { permissions: ['waitlist:read'] },
+        loadComponent: () =>
+          import('./features/appointments/waitlist/gestion-lista-espera/gestion-lista-espera').then(
+            (m) => m.GestionListaEspera,
+          ),
+        title: 'Hospital San Juan de Dios - Lista de Espera',
+      },
+      {
         path: 'fichas',
         canActivate: [staffGuard],
         loadComponent: () =>
@@ -774,6 +784,16 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/appointments/live-queue/mi-cola/mi-cola').then((m) => m.MiCola),
     title: 'Hospital San Juan de Dios - Mi Turno en Fila',
+  },
+  {
+    path: 'mi-lista-espera',
+    canActivate: [authGuard, permissionsGuard],
+    data: { permissions: ['waitlist:read'] },
+    loadComponent: () =>
+      import('./features/appointments/waitlist/mi-lista-espera/mi-lista-espera').then(
+        (m) => m.MiListaEspera,
+      ),
+    title: 'Hospital San Juan de Dios - Mi Lista de Espera',
   },
   {
     path: 'especialistas',

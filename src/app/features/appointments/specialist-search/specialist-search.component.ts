@@ -121,4 +121,10 @@ export class SpecialistSearchComponent implements OnInit {
   cerrarDetalle(): void {
     this.selectedSpecialist.set(null);
   }
+
+  /** Especialidad principal del especialista para precargar la lista de espera (CU07). */
+  idEspecialidadPrincipal(esp: EspecialistaItem): number | null {
+    const principal = esp.especialidades?.find((e) => e.es_principal) ?? esp.especialidades?.[0];
+    return principal?.id_especialidad ?? null;
+  }
 }

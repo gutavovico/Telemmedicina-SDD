@@ -1,0 +1,160 @@
+<app-header></app-header>
+
+<main class="min-h-screen bg-[#F0F5FB] pt-24 pb-12 px-4 sm:px-6 lg:px-8">
+  <div class="max-w-3xl mx-auto space-y-6">
+    <div class="flex items-center gap-2 text-sm">
+      <a routerLink="/" class="inline-flex items-center gap-2 rounded-full bg-secondary-container/30 px-3 py-1.5 text-secondary font-medium">
+        <span class="material-symbols-outlined text-[16px]">home</span>
+        Mi salud
+      </a>
+      <span class="material-symbols-outlined text-[18px] text-outline">chevron_right</span>
+      <span class="text-primary font-medium">Mi lista de espera</span>
+    </div>
+
+    <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#E8EDF4] flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-[#049CAB] flex items-center justify-center">
+          <span class="material-symbols-outlined text-[24px]">schedule</span>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-[#293954]">Mi lista de espera</h1>
+          <p class="text-sm text-gray-500">Te avisaremos cuando se libere un turno (CU07)</p>
+        </div>
+      </div>
+      <div class="flex gap-2">
+        <a routerLink="/especialistas" class="px-4 py-2.5 bg-white border border-[#E8EDF4] text-[#25627C] text-sm font-medium rounded-xl hover:bg-[#F0F5FB] transition">
+          Buscar especialistas
+        </a>
+        <button type="button" (click)="abrirFormulario()" class="px-4 py-2.5 bg-[#049CAB] hover:bg-[#1FA7AE] text-white text-sm font-medium rounded-xl transition cursor-pointer">
+          Inscribirme
+        </button>
+      </div>
+    </div>
+
+    @if (waitlist.error()) {
+      <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2">
+        <span class="material-symbols-outlined text-[20px] text-rose-600">error</span>
+        <span class="flex-grow">{{ waitlist.error() }}</span>
+        <button type="button" (click)="reintentar()" class="shrink-0 text-xs font-semibold text-primary hover:underline cursor-pointer">Reintentar</button>
+      </div>
+    }
+
+    @if (mostrarFormulario()) {
+      <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#E8EDF4] space-y-4">
+        <h2 class="text-lg font-semibold text-[#293954]">Nueva inscripción</h2>
+        @if (nombreMedico) {
+          <p class="text-sm text-gray-600">Especialista seleccionado: <strong>{{ nombreMedico }}</strong></p>
+        }
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <label class="block text-sm">
+            <span class="block text-gray-600 mb-1">ID de médico</span>
+            <input type="number" [(ngModel)]="idMedico" min="1" placeholder="Ej. 20"
+              class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+          </label>
+          <label class="block text-sm">
+            <span class="block text-gray-600 mb-1">ID de especialidad</span>
+            <input type="number" [(ngModel)]="idEspecialidad" min="1" placeholder="Ej. 10"
+              class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+          </label>
+          <label class="block text-sm">
+            <span class="block text-gray-600 mb-1">Fecha deseada (opcional)</span>
+            <input type="date" [(ngModel)]="fechaDeseada"
+              class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+          </label>
+          <label class="block text-sm sm:col-span-2">
+            <span class="block text-gray-600 mb-1">Motivo (opcional)</span>
+            <input type="text" [(ngModel)]="motivo" maxlength="500" placeholder="Ej. No encontré cupos en la fecha deseada"
+              class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+          </label>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button type="button" (click)="mostrarFormulario.set(false)"
+            class="px-4 py-2.5 text-sm font-medium text-gray-600 hover:text-[#293954] cursor-pointer">Cancelar</button>
+          <button type="button" (click)="inscribirse()" [disabled]="waitlist.accionEnCurso() || (!idMedico && !idEspecialidad)"
+            class="px-5 py-2.5 bg-[#049CAB] hover:bg-[#1FA7AE] disabled:opacity-50 text-white text-sm font-medium rounded-xl transition cursor-pointer">
+            Confirmar inscripción
+          </button>
+        </div>
+      </div>
+    }
+
+    @if (waitlist.cargando() && waitlist.mias().length === 0) {
+      <div class="bg-white p-12 rounded-2xl shadow-sm border border-[#E8EDF4] text-center">
+        <div class="inline-block w-8 h-8 border-4 border-[#049CAB] border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm text-gray-500 mt-3">Cargando tus inscripciones...</p>
+      </div>
+    }
+
+    @for (entrada of waitlist.mias(); track entrada.idListaEspera) {
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-[#E8EDF4] space-y-3">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-base font-semibold text-[#293954]">
+              {{ entrada.medicoNombre || 'Cualquier especialista' }}
+            </h3>
+            <p class="text-sm text-gray-500">
+              {{ entrada.especialidadNombre || 'Especialidad no especificada' }}
+              @if (entrada.fechaDeseada) { · Desde el {{ entrada.fechaDeseada }} }
+            </p>
+          </div>
+          <span class="px-3 py-1 rounded-full text-xs font-semibold"
+            [class.bg-amber-50]="entrada.estado === 'EN_ESPERA'"
+            [class.text-amber-700]="entrada.estado === 'EN_ESPERA'"
+            [class.bg-emerald-50]="entrada.estado === 'OFRECIDO'"
+            [class.text-emerald-700]="entrada.estado === 'OFRECIDO'"
+            [class.bg-gray-100]="entrada.estado !== 'EN_ESPERA' && entrada.estado !== 'OFRECIDO'"
+            [class.text-gray-600]="entrada.estado !== 'EN_ESPERA' && entrada.estado !== 'OFRECIDO'">
+            {{ etiquetaEstado(entrada.estado) }}
+          </span>
+        </div>
+
+        @if (entrada.estado === 'EN_ESPERA') {
+          <div class="p-3 rounded-xl bg-[#F0F5FB] flex items-center gap-3">
+            <span class="material-symbols-outlined text-[#049CAB]">leaderboard</span>
+            <span class="text-sm text-[#25627C]">Tu posición en la lista: <strong>#{{ entrada.posicion }}</strong></span>
+          </div>
+        }
+
+        @if (entrada.estado === 'OFRECIDO') {
+          <div class="p-4 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-sm space-y-3">
+            <p class="font-semibold flex items-center gap-2">
+              <span class="material-symbols-outlined text-[20px]">event_available</span>
+              ¡Hay un turno disponible para ti! Confirma o rechaza.
+            </p>
+            <div class="flex flex-wrap gap-2">
+              <button type="button" (click)="confirmar(entrada.idListaEspera)"
+                [disabled]="waitlist.accionEnCurso()"
+                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-sm font-medium rounded-xl cursor-pointer">
+                Confirmar turno
+              </button>
+              <button type="button" (click)="rechazar(entrada.idListaEspera)"
+                [disabled]="waitlist.accionEnCurso()"
+                class="px-4 py-2 bg-white border border-emerald-300 text-emerald-800 text-sm font-medium rounded-xl hover:bg-emerald-100 cursor-pointer">
+                Rechazar
+              </button>
+            </div>
+          </div>
+        }
+
+        @if (entrada.estado === 'EN_ESPERA' || entrada.estado === 'OFRECIDO') {
+          <div class="flex justify-end">
+            <button type="button" (click)="salir(entrada.idListaEspera)" [disabled]="waitlist.accionEnCurso()"
+              class="text-xs font-semibold text-rose-600 hover:underline cursor-pointer disabled:opacity-50">
+              Salir de la lista
+            </button>
+          </div>
+        }
+      </div>
+    } @empty {
+      @if (!waitlist.cargando()) {
+        <div class="bg-white p-10 rounded-2xl shadow-sm border border-[#E8EDF4] text-center space-y-3">
+          <div class="w-16 h-16 bg-gray-50 text-gray-400 rounded-full flex items-center justify-center mx-auto">
+            <span class="material-symbols-outlined text-[32px]">fact_check</span>
+          </div>
+          <h3 class="text-base font-semibold text-[#293954]">No tienes inscripciones activas</h3>
+          <p class="text-sm text-gray-500">Si no encuentras cupos, inscríbete y te avisaremos cuando se libere uno.</p>
+        </div>
+      }
+    }
+  </div>
+</main>

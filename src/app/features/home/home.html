@@ -76,6 +76,14 @@
           <h3 class="text-title-md font-title-md text-primary">Mi turno de hoy</h3>
           <p class="text-body-md font-body-md text-on-surface-variant">Tu posición y espera en la fila virtual.</p>
         </a>
+        <a
+          routerLink="/mi-lista-espera"
+          class="bg-surface-container-lowest rounded-3xl p-stack-lg shadow-level-1 hover:shadow-level-2 transition-all duration-300 border-l-4 border-[#049CAB] flex flex-col gap-2 group"
+        >
+          <span class="material-symbols-outlined text-2xl text-[#049CAB]">schedule</span>
+          <h3 class="text-title-md font-title-md text-primary">Mi lista de espera</h3>
+          <p class="text-body-md font-body-md text-on-surface-variant">Inscríbete y recibe avisos cuando se libere un turno.</p>
+        </a>
         @if (miPacienteId() !== null) {
           <button
             type="button"

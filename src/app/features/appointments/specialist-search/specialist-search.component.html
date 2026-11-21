@@ -158,6 +158,18 @@
           <button (click)="seleccionarEspecialista(esp)" class="btn-ver-disponibilidad">
             Ver Calendario de Disponibilidad
           </button>
+          <a
+            [routerLink]="['/mi-lista-espera']"
+            [queryParams]="{
+              idMedico: esp.id_medico,
+              idEspecialidad: idEspecialidadPrincipal(esp),
+              nombreMedico: esp.nombre_completo
+            }"
+            class="btn-ver-disponibilidad"
+            style="margin-left: 0.5rem; background: #049cab"
+          >
+            Unirme a lista de espera
+          </a>
         </div>
       </div>
     </div>
