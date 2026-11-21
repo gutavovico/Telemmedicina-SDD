@@ -259,6 +259,29 @@ describe('AuthService.userRole sin heurísticas (CU16 hallazgo 1)', () => {
     expect(service.userRole()).toBe('paciente');
   });
 
+  it('no consulta /medicos/me para roles que no pueden ser médicos', () => {
+    service.saveTokens('token-sintetico', 'refresh-sintetico');
+    service.currentUser.set(makeUser({ rol: 'ADMIN' }));
+    httpMock.get.mockClear();
+
+    service.fetchPerfilMedico();
+
+    expect(httpMock.get).not.toHaveBeenCalled();
+    expect(service.perfilMedico()).toBeNull();
+  });
+
+  it('consulta y guarda /medicos/me para un usuario con rol MEDICO', () => {
+    service.saveTokens('token-sintetico', 'refresh-sintetico');
+    service.currentUser.set(makeUser({ rol: 'MEDICO' }));
+    httpMock.get.mockClear();
+    httpMock.get.mockReturnValueOnce(of(makePerfilMedico(7)));
+
+    service.fetchPerfilMedico();
+
+    expect(httpMock.get).toHaveBeenCalledWith('http://localhost:8000/medicos/me');
+    expect(service.perfilMedico()).toEqual(makePerfilMedico(7));
+  });
+
   it('verifica perfil fresco y limpia acceso del Header al cerrar sesión', () => {
     service.saveTokens('token-sintetico', 'refresh-sintetico');
     httpMock.get.mockReturnValueOnce(of(makeUser({ rol: 'Administración', id_clinica: 1 })));

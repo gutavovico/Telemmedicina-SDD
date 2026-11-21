@@ -84,6 +84,10 @@ export const serverRoutes: ServerRoute[] = [
     renderMode: RenderMode.Client,
   },
   {
+    path: 'mis-vinculaciones-medico',
+    renderMode: RenderMode.Client,
+  },
+  {
     path: 'mis-documentos/:id',
     renderMode: RenderMode.Client,
   },
@@ -143,6 +147,10 @@ export const serverRoutes: ServerRoute[] = [
   },
   {
     path: 'admin/medicos',
+    renderMode: RenderMode.Client,
+  },
+  {
+    path: 'admin/medicos/vinculaciones',
     renderMode: RenderMode.Client,
   },
   {

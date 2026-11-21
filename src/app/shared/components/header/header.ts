@@ -228,6 +228,12 @@ export class Header {
     this.router.navigate(['/admin/agenda']);
   }
 
+  goToMisVinculaciones(): void {
+    this.closeDropdown();
+    this.closeMobileMenu();
+    this.router.navigate(['/mis-vinculaciones-medico']);
+  }
+
   logout(): void {
     this.closeDropdown();
     this.closeMobileMenu();
