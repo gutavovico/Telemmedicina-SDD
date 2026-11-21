@@ -256,8 +256,10 @@ def test_integrated_migration_graph_has_one_head():
     from alembic.script import ScriptDirectory
     root=Path(__file__).resolve().parents[1]
     config=Config(str(root/'alembic.ini'));config.set_main_option('script_location',str(root/'alembic'))
-    assert ScriptDirectory.from_config(config).get_heads()==['cu35_cu18_convergencia_023']
     script=ScriptDirectory.from_config(config)
+    assert script.get_heads()==['cu07_lista_espera_026']
+    assert script.get_revision('cu07_lista_espera_026').down_revision==(
+        'cu11_resultados_laboratorio_025')
     assert script.get_revision('cu35_integracion_022').down_revision=='cu06_servicios_clinica_021'
     assert script.get_revision('cu35_cu18_convergencia_023').down_revision==(
         'merge_cu18_asistencia_022','cu35_integracion_022')
@@ -305,6 +307,19 @@ def test_scheduler_is_explicitly_opt_in_and_registered_without_starting_it(env):
         scheduler.start.assert_called_once()
         assert scheduler.add_job.call_args.kwargs['seconds']==60
         worker.stop();scheduler.shutdown.assert_called_once_with(wait=False)
+
+
+def test_clinical_access_tolerates_legacy_schema_without_subscription_tables():
+    """CU10 y otros modulos con fixtures ligeras no deben romper por el gate CU35."""
+    from sqlalchemy import create_engine
+    from sqlalchemy.orm import sessionmaker
+    from app.modules.tenants.subscription_changes.access import assert_clinical_access
+    engine=create_engine('sqlite://')
+    db=sessionmaker(bind=engine)()
+    try:
+        assert assert_clinical_access(db,1) is None
+    finally:
+        db.close();engine.dispose()
 
 
 def test_real_auth_blocks_only_cancelled_tenant_clinical_access_at_boundary(env,monkeypatch):

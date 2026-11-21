@@ -217,6 +217,81 @@ class HorarioMedico(Base):
         return f"<HorarioMedico(id={self.id_horario}, medico={self.id_medico}, dia={self.dia_semana}, estado='{self.estado}')>"
 
 
+class ListaEspera(Base):
+    """Inscripcion en lista de espera y reasignacion de cupos liberados (CU07)."""
+
+    __tablename__ = "lista_espera"
+
+    id_lista_espera = Column(
+        BigInteger().with_variant(Integer, "sqlite"),
+        primary_key=True,
+        autoincrement=True,
+        index=True,
+    )
+    id_clinica = Column(
+        BigInteger,
+        ForeignKey("clinicas.id_clinica", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    id_paciente = Column(
+        BigInteger,
+        ForeignKey("pacientes.id_paciente", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    id_medico = Column(
+        BigInteger,
+        ForeignKey("medicos.id_medico", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    id_especialidad = Column(
+        BigInteger,
+        ForeignKey("especialidades.id_especialidad", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    fecha_deseada = Column(Date, nullable=True, index=True)
+    estado = Column(
+        String(20),
+        nullable=False,
+        default="EN_ESPERA",
+        server_default="EN_ESPERA",
+        index=True,
+    )
+    prioridad = Column(Integer, nullable=False, default=0, server_default="0")
+    motivo = Column(Text, nullable=True)
+    id_cita_ofrecida = Column(
+        BigInteger,
+        ForeignKey("citas.id_cita", ondelete="SET NULL"),
+        nullable=True,
+    )
+    fecha_ofrecimiento = Column(DateTime(timezone=True), nullable=True)
+    fecha_respuesta = Column(DateTime(timezone=True), nullable=True)
+    fecha_creacion = Column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    updated_at = Column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=True
+    )
+
+    paciente = relationship("Paciente")
+    medico = relationship("Medico")
+    especialidad = relationship("Especialidad")
+    cita_ofrecida = relationship("Cita", foreign_keys=[id_cita_ofrecida])
+
+    @property
+    def tenant_id(self):
+        return str(self.id_clinica) if self.id_clinica is not None else None
+
+    def __repr__(self) -> str:
+        return (
+            f"<ListaEspera(id={self.id_lista_espera}, paciente={self.id_paciente}, "
+            f"medico={self.id_medico}, estado='{self.estado}', prioridad={self.prioridad})>"
+        )
+
+
 class BloqueoAgenda(Base):
     __tablename__ = "bloqueos_agenda"
 

@@ -92,3 +92,40 @@ def notificar_pago_confirmado(db: Session, pago: Pago) -> int:
     except Exception as exc:
         logger.exception("Error preparando push del pago %s: %s", pago.id_pago, exc)
         return 0
+
+
+def enviar_push_usuario(
+    db: Session,
+    id_usuario: int,
+    id_clinica: int,
+    titulo: str,
+    mensaje: str,
+    data: dict | None = None,
+) -> int:
+    """Envia un push best-effort a los dispositivos activos de un usuario.
+
+    Reutiliza la infraestructura FCM de CU17/CU19. Nunca lanza excepciones:
+    un fallo del proveedor no debe revertir la operacion de negocio.
+    Devuelve cuantos dispositivos recibieron el aviso.
+    """
+    try:
+        if not avisos.push_configurado():
+            return 0
+        enviados = 0
+        for dispositivo in _dispositivos_activos(db, id_usuario, id_clinica):
+            try:
+                token = avisos.descifrar_token(dispositivo.token_cifrado)
+                avisos.enviar_fcm_mensaje(token, titulo, mensaje, data or {})
+                enviados += 1
+            except Exception as exc:
+                logger.warning(
+                    "No se pudo enviar push al usuario %s dispositivo %s: %s",
+                    id_usuario,
+                    dispositivo.id_dispositivo,
+                    exc,
+                )
+        return enviados
+    except Exception as exc:
+        logger.exception("Error preparando push del usuario %s: %s", id_usuario, exc)
+        return 0
+
