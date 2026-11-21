@@ -179,10 +179,14 @@ Crear una sesión de pago (Stripe Checkout) para una cita.
 **Request:** `CheckoutCreate`  
 **Respuesta (201):** `CheckoutResponse`
 
+Si existe un pago aprobado o un checkout vigente, se devuelve el pago ya emitido con su importe. Al solicitar un checkout nuevo para una cita con tarifa explícita de cero, la API informa `409 Conflict` con `{"detail":"Esta cita no requiere pago"}`. La cita conserva su estado y no se registra un pago nuevo.
+
 #### `GET /pendientes`
 Listar citas/teleconsultas pendientes de pago del usuario autenticado.
 
 **Respuesta (200):** `CitaPendienteListResponse`
+
+Las citas con tarifa cero sin pago pendiente se omiten. Si ya existe un pago pendiente, se muestra el importe registrado en ese pago.
 
 #### `GET /mis-pagos`
 Listar los pagos y comprobantes del usuario autenticado.
