@@ -133,6 +133,8 @@ def crear_cita(db: Session, datos: CitaCreate) -> CitaResponse:
     db.add(nueva_cita)
     db.commit()
     db.refresh(nueva_cita)
+    from app.modules.communications.notificaciones.hooks import notificar_cita_creada
+    notificar_cita_creada(db, nueva_cita, paciente, medico)
     return formatear_cita_response(nueva_cita)
 
 
@@ -244,6 +246,13 @@ def actualizar_cita(db: Session, id_cita: int, datos: CitaUpdate) -> Optional[Ci
 
     db.commit()
     db.refresh(cita)
+    from app.modules.communications.notificaciones.hooks import notificar_cita_actualizada
+    notificar_cita_actualizada(
+        db,
+        cita,
+        estado_nuevo=update_dict.get("estado"),
+        cambio_horario=("fecha_cita" in update_dict or "hora_inicio" in update_dict),
+    )
     return formatear_cita_response(cita)
 
 
