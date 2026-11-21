@@ -5,6 +5,9 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session, joinedload
 
 from app.modules.appointments.models import Cita, Medico, Especialidad
+from app.modules.appointments.doctor_entity_links.context import (
+    resolve_active_medical_link_for_tenant,
+)
 from app.modules.appointments.consultas.schemas import (
     CitaCreate,
     CitaListResponse,
@@ -87,26 +90,100 @@ def formatear_cita_response(cita: Cita) -> CitaResponse:
     )
 
 
-def crear_cita(db: Session, datos: CitaCreate) -> CitaResponse:
+def _rol_efectivo(db: Session, user: Usuario, tenant_id: int) -> str:
+    """Rol operativo de la entidad seleccionada, sin caer al rol global."""
+    contexto = resolve_active_medical_link_for_tenant(db, user, tenant_id)
+    if contexto is not None:
+        nombres = {(rol or "").strip().upper() for rol in contexto.roles}
+        if nombres & {"ADMIN", "ADMINISTRADOR", "ADMINISTRACION"}:
+            return "ADMIN"
+        if nombres & {"MEDICO", "MÉDICO", "MEDICO_ESPECIALISTA"}:
+            return "MEDICO"
+        if "RECEPCION" in nombres or "RECEPCIÓN" in nombres:
+            return "RECEPCION"
+        return ""
+    nombre = (getattr(user, "rol", "") or "").strip().upper()
+    if nombre in {"ADMIN", "ADMINISTRADOR", "ADMINISTRACION"}:
+        return "ADMIN"
+    if nombre in {"MEDICO", "MÉDICO", "MEDICO_ESPECIALISTA"}:
+        return "MEDICO"
+    if nombre in {"RECEPCION", "RECEPCIÓN"}:
+        return "RECEPCION"
+    if nombre == "PACIENTE":
+        return "PACIENTE"
+    return ""
+
+
+def _medico_pertenece_tenant(db: Session, id_medico: int, tenant_id: int) -> bool:
+    return db.query(Medico.id_medico).join(
+        Usuario, Medico.id_usuario == Usuario.id_usuario
+    ).filter(
+        Medico.id_medico == id_medico,
+        (Medico.id_clinica == tenant_id) | (Usuario.id_clinica == tenant_id),
+    ).first() is not None
+
+
+def _paciente_pertenece_tenant(db: Session, id_paciente: int, tenant_id: int) -> bool:
+    return db.query(Paciente.id_paciente).filter(
+        Paciente.id_paciente == id_paciente,
+        Paciente.id_clinica == tenant_id,
+    ).first() is not None
+
+
+def _id_medico_propio(
+    db: Session, user: Usuario, tenant_id: int
+) -> Optional[int]:
+    contexto = resolve_active_medical_link_for_tenant(db, user, tenant_id)
+    if contexto is not None:
+        return contexto.link.id_medico
+    return db.query(Medico.id_medico).filter(
+        Medico.id_usuario == user.id_usuario
+    ).first()
+
+
+def _verificar_acceso_cita(
+    db: Session, cita: Cita, user: Usuario, tenant_id: int
+) -> None:
+    if _rol_efectivo(db, user, tenant_id) != "MEDICO":
+        return
+    id_medico_propio = _id_medico_propio(db, user, tenant_id)
+    if id_medico_propio is None or int(cita.id_medico) != int(id_medico_propio):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cita no encontrada",
+        )
+
+
+def crear_cita(
+    db: Session, datos: CitaCreate, *, tenant_id: int, current_user: Usuario
+) -> CitaResponse:
     paciente = db.query(Paciente).filter(Paciente.id_paciente == datos.id_paciente).first()
-    if not paciente:
+    if not paciente or not _paciente_pertenece_tenant(db, datos.id_paciente, tenant_id):
         raise ValueError(f"El paciente con ID {datos.id_paciente} no existe")
 
     medico = db.query(Medico).filter(Medico.id_medico == datos.id_medico).first()
-    if not medico:
+    if not medico or not _medico_pertenece_tenant(db, datos.id_medico, tenant_id):
         raise ValueError(f"El médico con ID {datos.id_medico} no existe")
-    clinica_id = medico.id_clinica or paciente.id_clinica
-    if clinica_id:
-        clinica = db.query(Clinica).filter(Clinica.id_clinica == clinica_id).first()
-        if clinica and canonical_tenant_status(clinica.estado) == CANONICAL_SUSPENDED:
+    clinica = db.query(Clinica).filter(Clinica.id_clinica == tenant_id).first()
+    if clinica and canonical_tenant_status(clinica.estado) == CANONICAL_SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operación no permitida: el tenant se encuentra suspendido",
+        )
+
+    if _rol_efectivo(db, current_user, tenant_id) == "MEDICO":
+        contexto = resolve_active_medical_link_for_tenant(db, current_user, tenant_id)
+        id_medico_propio = contexto.link.id_medico if contexto is not None else None
+        if id_medico_propio is None or int(id_medico_propio) != int(datos.id_medico):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
-                detail="Operación no permitida: el tenant se encuentra suspendido",
+                detail="Solo puedes gestionar tus propias citas",
             )
 
     cita_ocupada = (
         db.query(Cita)
         .filter(
+            Cita.id_clinica == tenant_id,
             Cita.id_medico == datos.id_medico,
             Cita.fecha_cita == datos.fecha_cita,
             Cita.hora_inicio == datos.hora_inicio,
@@ -117,7 +194,6 @@ def crear_cita(db: Session, datos: CitaCreate) -> CitaResponse:
     if cita_ocupada:
         raise ValueError("El horario seleccionado ya está ocupado para este médico")
 
-    # Construir fecha_hora_inicio si es posible
     fecha_hora_ini = None
     try:
         partes = datos.hora_inicio.split(":")
@@ -127,6 +203,7 @@ def crear_cita(db: Session, datos: CitaCreate) -> CitaResponse:
         pass
 
     nueva_cita = Cita(
+        id_clinica=tenant_id,
         id_paciente=datos.id_paciente,
         id_medico=datos.id_medico,
         id_especialidad=datos.id_especialidad,
@@ -146,17 +223,26 @@ def crear_cita(db: Session, datos: CitaCreate) -> CitaResponse:
     return formatear_cita_response(nueva_cita)
 
 
-def obtener_cita_por_id(db: Session, id_cita: int) -> Optional[Cita]:
-    return (
+def obtener_cita_por_id(
+    db: Session,
+    id_cita: int,
+    *,
+    tenant_id: int,
+    current_user: Optional[Usuario] = None,
+) -> Optional[Cita]:
+    cita = (
         db.query(Cita)
         .options(
             joinedload(Cita.paciente),
             joinedload(Cita.medico).joinedload(Medico.usuario),
             joinedload(Cita.especialidad),
         )
-        .filter(Cita.id_cita == id_cita)
+        .filter(Cita.id_cita == id_cita, Cita.id_clinica == tenant_id)
         .first()
     )
+    if cita is not None and current_user is not None:
+        _verificar_acceso_cita(db, cita, current_user, tenant_id)
+    return cita
 
 
 def listar_citas(
@@ -169,6 +255,8 @@ def listar_citas(
     tipo_consulta: Optional[str] = None,
     page: int = 1,
     page_size: int = 20,
+    tenant_id: Optional[int] = None,
+    current_user: Optional[Usuario] = None,
 ) -> CitaListResponse:
     query = (
         db.query(Cita)
@@ -182,6 +270,23 @@ def listar_citas(
             joinedload(Cita.especialidad),
         )
     )
+    if tenant_id is not None:
+        query = query.filter(Cita.id_clinica == tenant_id)
+    if tenant_id is not None and current_user is not None:
+        rol = _rol_efectivo(db, current_user, tenant_id)
+        if rol == "MEDICO":
+            id_medico_propio = _id_medico_propio(db, current_user, tenant_id)
+            if id_medico_propio is None:
+                return CitaListResponse(total=0, page=page, page_size=page_size, items=[])
+            query = query.filter(Cita.id_medico == id_medico_propio)
+        elif rol == "PACIENTE":
+            id_paciente = db.query(Paciente.id_paciente).filter(
+                Paciente.id_usuario == current_user.id_usuario,
+                Paciente.id_clinica == tenant_id,
+            ).first()
+            if id_paciente is None:
+                return CitaListResponse(total=0, page=page, page_size=page_size, items=[])
+            query = query.filter(Cita.id_paciente == id_paciente)
 
     if q and q.strip():
         search = f"%{q.strip()}%"
@@ -227,10 +332,23 @@ def listar_citas(
     )
 
 
-def actualizar_cita(db: Session, id_cita: int, datos: CitaUpdate) -> Optional[CitaResponse]:
-    cita = db.query(Cita).filter(Cita.id_cita == id_cita).first()
+def actualizar_cita(
+    db: Session,
+    id_cita: int,
+    datos: CitaUpdate,
+    *,
+    tenant_id: int,
+    current_user: Optional[Usuario] = None,
+) -> Optional[CitaResponse]:
+    cita = (
+        db.query(Cita)
+        .filter(Cita.id_cita == id_cita, Cita.id_clinica == tenant_id)
+        .first()
+    )
     if not cita:
         return None
+    if current_user is not None:
+        _verificar_acceso_cita(db, cita, current_user, tenant_id)
 
     update_dict = datos.model_dump(exclude_unset=True)
     for key, value in update_dict.items():
@@ -257,19 +375,39 @@ def actualizar_cita(db: Session, id_cita: int, datos: CitaUpdate) -> Optional[Ci
     return formatear_cita_response(cita)
 
 
-def eliminar_cita(db: Session, id_cita: int) -> bool:
-    cita = db.query(Cita).filter(Cita.id_cita == id_cita).first()
+def eliminar_cita(
+    db: Session,
+    id_cita: int,
+    *,
+    tenant_id: int,
+    current_user: Optional[Usuario] = None,
+) -> bool:
+    cita = (
+        db.query(Cita)
+        .filter(Cita.id_cita == id_cita, Cita.id_clinica == tenant_id)
+        .first()
+    )
     if not cita:
         return False
+    if current_user is not None:
+        _verificar_acceso_cita(db, cita, current_user, tenant_id)
     db.delete(cita)
     db.commit()
     return True
 
 
-def obtener_horarios_disponibles(db: Session, id_medico: int, fecha: date) -> List[HorarioSlot]:
+def obtener_horarios_disponibles(
+    db: Session, id_medico: int, fecha: date, *, tenant_id: int
+) -> List[HorarioSlot]:
+    if not _medico_pertenece_tenant(db, id_medico, tenant_id):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Médico no encontrado",
+        )
     citas_ocupadas = (
         db.query(Cita.hora_inicio)
         .filter(
+            Cita.id_clinica == tenant_id,
             Cita.id_medico == id_medico,
             Cita.fecha_cita == fecha,
             Cita.estado != "CANCELADA"

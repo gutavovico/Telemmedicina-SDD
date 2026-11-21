@@ -28,6 +28,7 @@ from app.modules.medical_records.hce.models import HistoriaClinica, Consulta, Di
 from app.modules.medical_records.clinical_documents.models import DocumentoClinico
 from app.modules.communications.models import MensajeChatCita
 from app.modules.medical_records.prescriptions.models import Medicamento
+from scripts.cu29_admin_roles import reparar_roles_admin_demo
 
 
 def _resync_pk_sequence(db: Session, tabla: str, columna: str) -> None:
@@ -405,6 +406,17 @@ def seed_all():
                 print(f"  [=] Usuario actualizado: {u_data['correo']}")
             db.flush()
             user_map[u_data["correo"]] = user
+
+        # CU29 exige que el rol ADMIN y el usuario pertenezcan a la misma
+        # clínica. El seed legacy usaba un único rol ADMIN global para ambos
+        # tenants. Reparar después de crear/actualizar las cuentas evita que
+        # el administrador reciba 403 al listar vinculaciones.
+        resultado_roles_admin = reparar_roles_admin_demo(db)
+        print(
+            "  [=] Roles ADMIN tenant-scoped verificados para CU29 "
+            f"(roles creados: {resultado_roles_admin.roles_creados or 'ninguno'}, "
+            f"permisos copiados: {resultado_roles_admin.permisos_copiados})"
+        )
 
         # -------------------------------------------------------------
         # 4. Pacientes Clínicos

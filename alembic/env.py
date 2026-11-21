@@ -13,6 +13,13 @@ from app.core.database import Base
 # Importar modelos para que Alembic los detecte
 from app.modules.auth.models import Usuario, Clinica, Rol, Permiso, RolPermiso, TokenBlacklist, Auditoria, Plan, VersionPlan  # noqa: F401
 from app.modules.appointments.models import Especialidad, Medico, MedicoEspecialidad, Cita, ServicioMedico, HorarioMedico, BloqueoAgenda  # noqa: F401
+from app.modules.appointments.doctor_entity_links.models import (  # noqa: F401
+    VinculacionMedicoEntidad,
+    VinculacionMedicoRol,
+    VinculacionMedicoEspecialidad,
+    HistorialVinculacionMedico,
+    CredencialTemporalMedico,
+)
 from app.modules.medical_records.models import Paciente, FichaClinica  # noqa: F401
 from app.modules.medical_records.hce.models import HistoriaClinica, Consulta, Diagnostico  # noqa: F401
 from app.modules.medical_records.clinical_documents.models import DocumentoClinico  # noqa: F401
@@ -82,7 +89,7 @@ def run_migrations_online() -> None:
         with context.begin_transaction():
             # Do not rewrite shared revision 020. Refuse its historical name-based
             # backfill BEFORE it executes, even for direct `alembic upgrade head`.
-            destination = context.get_revision_argument()
+            destination = context.get_context().opts.get("destination_rev")
             if destination and inspect(connection).has_table('plan_versions'):
                 from alembic.script import ScriptDirectory
                 script = ScriptDirectory.from_config(config)

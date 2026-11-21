@@ -244,10 +244,20 @@ def get_tenant_context(
             clinica_nombre = clinica.nombre
             clinica_estado = clinica.estado
     else:
-        if current_user.id_clinica is not None:
+        from app.modules.appointments.doctor_entity_links.dependencies import (
+            resolve_active_medical_link,
+        )
+
+        contexto_medico = resolve_active_medical_link(db, current_user, x_tenant_id)
+        tenant_objetivo = (
+            contexto_medico.link.id_clinica
+            if contexto_medico is not None
+            else current_user.id_clinica
+        )
+        if tenant_objetivo is not None:
             clinica = (
                 db.query(Clinica)
-                .filter(Clinica.id_clinica == current_user.id_clinica)
+                .filter(Clinica.id_clinica == tenant_objetivo)
                 .first()
             )
             if not clinica:
@@ -265,24 +275,40 @@ def get_tenant_context(
             clinica_estado = clinica.estado
 
     permisos: List[str] = []
-    user_with_perms = (
-        db.query(Usuario)
-        .options(joinedload(Usuario.rol_rel))
-        .filter(Usuario.id_usuario == current_user.id_usuario)
-        .first()
-    )
+    roles_efectivos: List[str] = []
     rol_nombre = ""
-    if user_with_perms and user_with_perms.rol_rel:
-        rol_nombre = user_with_perms.rol_rel.nombre
-        for p in getattr(user_with_perms.rol_rel, "permisos", []):
-            if getattr(p, "estado", "") and p.estado.upper() != "ACTIVO":
-                continue
-            if getattr(p, "nombre", None) and p.nombre not in permisos:
-                permisos.append(p.nombre)
-            if getattr(p, "modulo", None) and getattr(p, "accion", None):
-                code = f"{p.modulo}.{p.accion}"
-                if code not in permisos:
-                    permisos.append(code)
+    if not super_admin:
+        from app.modules.appointments.doctor_entity_links.dependencies import (
+            resolve_active_medical_link,
+        )
+
+        contexto_medico = resolve_active_medical_link(db, current_user, x_tenant_id)
+        if contexto_medico is not None:
+            rol_nombre = contexto_medico.rol_principal or ""
+            roles_efectivos = list(contexto_medico.roles)
+            permisos = list(contexto_medico.permisos)
+
+    if not permisos and not roles_efectivos:
+        user_with_perms = (
+            db.query(Usuario)
+            .options(joinedload(Usuario.rol_rel))
+            .filter(Usuario.id_usuario == current_user.id_usuario)
+            .first()
+        )
+        if user_with_perms and user_with_perms.rol_rel:
+            rol_nombre = user_with_perms.rol_rel.nombre
+            roles_efectivos = [rol_nombre]
+            for p in getattr(user_with_perms.rol_rel, "permisos", []):
+                if getattr(p, "estado", "") and p.estado.upper() != "ACTIVO":
+                    continue
+                if getattr(p, "nombre", None) and p.nombre not in permisos:
+                    permisos.append(p.nombre)
+                if getattr(p, "modulo", None) and getattr(p, "accion", None):
+                    code = f"{p.modulo}.{p.accion}"
+                    if code not in permisos:
+                        permisos.append(code)
+    elif rol_nombre and rol_nombre not in roles_efectivos:
+        roles_efectivos.insert(0, rol_nombre)
 
     return TenantContextResponse(
         clinica_id=clinica_id,
@@ -293,6 +319,7 @@ def get_tenant_context(
         usuario_apellidos=current_user.apellidos,
         usuario_correo=current_user.correo,
         rol=rol_nombre,
+        roles=roles_efectivos,
         permisos=permisos,
         es_super_admin=super_admin,
     )

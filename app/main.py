@@ -102,6 +102,8 @@ async def strip_backend_api_prefix(request: Request, call_next):
 
 # Registro de routers de módulos
 app.include_router(auth_router)
+# CU29: contrato canónico /api/v1/auth/* conservando el alias legacy /auth/*.
+app.include_router(auth_router, prefix="/api/v1")
 
 # Contexto de Tenant y Clínicas (SaaS multitenant)
 app.include_router(clinicas_router)

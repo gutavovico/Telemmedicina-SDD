@@ -8,11 +8,16 @@ from datetime import date, datetime, time, timedelta, timezone
 import unicodedata
 
 from fastapi import HTTPException
-from sqlalchemy import BigInteger, Date, column, func, inspect, select, table
+from sqlalchemy import BigInteger, Date, column, func, inspect, or_, select, table
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.modules.appointments.doctor_profile.service import obtener_medico, obtener_medico_por_usuario
+from app.modules.appointments.doctor_entity_links.compat import cu29_tables_available
+from app.modules.appointments.doctor_entity_links.context import (
+    resolve_active_medical_link_for_tenant,
+)
+from app.modules.appointments.doctor_entity_links.models import VinculacionMedicoEntidad
 from app.modules.appointments.models import BloqueoAgenda, HorarioMedico, Medico, ServicioMedico
 from app.modules.auth.models import Auditoria, Usuario
 from app.modules.communications.models import Notificacion
@@ -47,20 +52,48 @@ def _rol(user: Usuario) -> str:
     return nombre
 
 
-def _contexto(user: Usuario, tenant_id: int | None, roles=("MEDICO", "RECEPCION")) -> str:
-    rol = _rol(user)
-    rol_rel = getattr(user, "rol_rel", None)
-    estado_rol = getattr(rol_rel, "estado", None) if rol_rel is not None else None
-    if rol not in roles or (isinstance(estado_rol, str) and estado_rol.lower() != "activo"):
-        raise HTTPException(403, "No tienes permisos para esta operación de agenda")
-    # Un header no concede acceso a una clínica a un usuario sin pertenencia.
-    if user.id_clinica is None or tenant_id != user.id_clinica:
+def _rol_efectivo(db, user: Usuario, tenant_id: int) -> str:
+    """Obtiene el rol operativo de la entidad seleccionada.
+
+    Para una cuenta con vínculos CU29 se usa exclusivamente el rol del
+    vínculo ``ACTIVO``. Las cuentas legacy conservan el comportamiento previo.
+    """
+    contexto = resolve_active_medical_link_for_tenant(db, user, tenant_id)
+    if contexto is None:
+        return _rol(user)
+
+    roles = {
+        "".join(
+            c
+            for c in unicodedata.normalize("NFD", (rol or "").upper())
+            if not unicodedata.combining(c)
+        )
+        for rol in contexto.roles
+    }
+    for rol in roles:
+        if rol in ("ADMIN", "ADMINISTRADOR", "ADMINISTRACION"):
+            return "ADMIN"
+    if "MEDICO" in roles or "MEDICO_ESPECIALISTA" in roles:
+        return "MEDICO"
+    if "RECEPCION" in roles:
+        return "RECEPCION"
+    return ""
+
+
+def _contexto(db, user: Usuario, tenant_id: int | None, roles=("MEDICO", "RECEPCION")) -> str:
+    if tenant_id is None:
         raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
+    rol = _rol_efectivo(db, user, int(tenant_id))
+    if rol not in roles:
+        raise HTTPException(403, "No tienes permisos para esta operación de agenda")
+    if resolve_active_medical_link_for_tenant(db, user, int(tenant_id)) is None:
+        if user.id_clinica is None or int(tenant_id) != int(user.id_clinica):
+            raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
     return rol
 
 
 def _medico(db, user, tenant_id, id_medico=None):
-    rol = _contexto(user, tenant_id)
+    rol = _contexto(db, user, tenant_id)
     if rol == "MEDICO":
         medico = obtener_medico_por_usuario(db, user.id_usuario, current_tenant_id=tenant_id)
         if id_medico is not None and id_medico != medico.id_medico:
@@ -71,8 +104,16 @@ def _medico(db, user, tenant_id, id_medico=None):
     return obtener_medico(db, id_medico, current_tenant_id=tenant_id)
 
 
-def _servicio(db, id_servicio):
-    servicio = db.get(ServicioMedico, id_servicio)
+def _servicio(db, id_servicio, tenant_id):
+    query = db.query(ServicioMedico).filter(ServicioMedico.id_servicio == id_servicio)
+    if tenant_id is not None:
+        query = query.filter(
+            or_(
+                ServicioMedico.id_clinica == tenant_id,
+                ServicioMedico.id_clinica.is_(None),
+            )
+        )
+    servicio = query.first()
     if servicio is None:
         raise HTTPException(404, "Servicio médico no encontrado")
     if servicio.estado.lower() != "activo":
@@ -83,24 +124,52 @@ def _servicio(db, id_servicio):
 
 
 def _scope(db, model, user, tenant_id, id_medico=None, revisar=False):
-    rol = _contexto(user, tenant_id, ("MEDICO", "RECEPCION", "ADMIN") if revisar else ("MEDICO", "RECEPCION"))
-    query = db.query(model).join(Medico, model.id_medico == Medico.id_medico).join(
-        Usuario, Medico.id_usuario == Usuario.id_usuario
-    ).filter(Usuario.id_clinica == tenant_id)
+    rol = _contexto(db, user, tenant_id, ("MEDICO", "RECEPCION", "ADMIN") if revisar else ("MEDICO", "RECEPCION"))
+    query = db.query(model).join(Medico, model.id_medico == Medico.id_medico)
     if rol == "MEDICO" or id_medico is not None:
         if rol == "ADMIN":
             medico = obtener_medico(db, id_medico, current_tenant_id=tenant_id)
         else:
             medico = _medico(db, user, tenant_id, id_medico)
         query = query.filter(model.id_medico == medico.id_medico)
+    else:
+        if cu29_tables_available(db):
+            query = query.filter(
+                Medico.id_usuario.in_(
+                    db.query(Usuario.id_usuario)
+                    .join(
+                        VinculacionMedicoEntidad,
+                        VinculacionMedicoEntidad.id_usuario == Usuario.id_usuario,
+                    )
+                    .filter(
+                        VinculacionMedicoEntidad.id_clinica == tenant_id,
+                        VinculacionMedicoEntidad.estado == "ACTIVO",
+                    )
+                )
+            )
+        else:
+            query = query.join(Usuario, Medico.id_usuario == Usuario.id_usuario).filter(
+                Usuario.id_clinica == tenant_id
+            )
     return query
 
 
 def _lock_medico(db, id_medico, tenant_id):
-    # Serializa altas CU05 del mismo médico sin inventar restricciones en Neon.
-    db.query(Medico).join(Usuario).filter(
-        Medico.id_medico == id_medico, Usuario.id_clinica == tenant_id
-    ).with_for_update(of=Medico).one()
+    # El vínculo CU29 es la autoridad multi-entidad; el filtro legacy se usa
+    # únicamente cuando el esquema CU29 no está disponible.
+    if cu29_tables_available(db):
+        db.query(Medico).join(
+            VinculacionMedicoEntidad,
+            VinculacionMedicoEntidad.id_medico == Medico.id_medico,
+        ).filter(
+            Medico.id_medico == id_medico,
+            VinculacionMedicoEntidad.id_clinica == tenant_id,
+            VinculacionMedicoEntidad.estado == "ACTIVO",
+        ).with_for_update(of=Medico).one()
+    else:
+        db.query(Medico).join(Usuario).filter(
+            Medico.id_medico == id_medico, Usuario.id_clinica == tenant_id
+        ).with_for_update(of=Medico).one()
 
 
 def _auditar(db, user, tenant_id, registro, accion, descripcion):
@@ -128,8 +197,18 @@ def _guardar(db):
 
 
 def listar_servicios(db, user, tenant_id):
-    _contexto(user, tenant_id)
-    return db.query(ServicioMedico).order_by(ServicioMedico.id_servicio).all()
+    _contexto(db, user, tenant_id)
+    return (
+        db.query(ServicioMedico)
+        .filter(
+            or_(
+                ServicioMedico.id_clinica == tenant_id,
+                ServicioMedico.id_clinica.is_(None),
+            )
+        )
+        .order_by(ServicioMedico.id_servicio)
+        .all()
+    )
 
 
 def listar_horarios(db, user, tenant_id, id_medico=None):
@@ -138,7 +217,7 @@ def listar_horarios(db, user, tenant_id, id_medico=None):
 
 def crear_horario(db: Session, datos: HorarioCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    _servicio(db, datos.id_servicio)
+    _servicio(db, datos.id_servicio, tenant_id)
     _lock_medico(db, medico.id_medico, tenant_id)
     existente = _scope(db, HorarioMedico, user, tenant_id, medico.id_medico).filter(
         HorarioMedico.id_servicio == datos.id_servicio, HorarioMedico.dia_semana == datos.dia_semana
@@ -168,7 +247,7 @@ def cambiar_estado_horario(db, id_horario, estado, user, tenant_id):
     if not horario:
         raise HTTPException(404, "Horario no encontrado")
     if estado == "activo":
-        _servicio(db, horario.id_servicio)
+        _servicio(db, horario.id_servicio, tenant_id)
     anterior = horario.estado
     horario.estado = estado
     _auditar(db, user, tenant_id, horario, "CAMBIAR_ESTADO", f"Disponibilidad: {anterior} -> {estado}")
@@ -188,7 +267,7 @@ def _segundos(hora: time):
 
 def crear_bloqueo(db: Session, datos: BloqueoCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    servicio = _servicio(db, datos.id_servicio)
+    servicio = _servicio(db, datos.id_servicio, tenant_id)
     if _rol(user) == "MEDICO" and datos.fecha != hoy_agenda() + timedelta(days=1):
         raise HTTPException(422, "El médico solo puede solicitar bloqueos para el día siguiente")
     inicio, fin = _segundos(datos.hora_inicio), _segundos(datos.hora_fin)
@@ -226,15 +305,36 @@ def _citas(db, id_medico, fecha, tenant_id):
     columnas = {c["name"]: c["type"] for c in inspector.get_columns("citas")} if inspector.has_table("citas") else {}
     if not necesarios.issubset(columnas):
         return [], ["No se pudo verificar citas: la tabla o sus columnas requeridas no están disponibles"]
-    citas = table("citas", column("id_cita", BigInteger), column("id_paciente", BigInteger),
-                  column("id_medico", BigInteger), column("fecha_cita", Date),
-                  column("hora_inicio", columnas["hora_inicio"]), column("hora_fin", columnas["hora_fin"]),
-                  column("estado", columnas["estado"]))
-    consulta = select(citas.c.id_cita, citas.c.id_paciente, citas.c.hora_inicio, citas.c.hora_fin,
-                      citas.c.estado).select_from(
-        citas.join(Medico.__table__, citas.c.id_medico == Medico.id_medico).join(
-            Usuario.__table__, Medico.id_usuario == Usuario.id_usuario)
-    ).where(citas.c.id_medico == id_medico, citas.c.fecha_cita == fecha, Usuario.id_clinica == tenant_id)
+    elementos_cita = [
+        column("id_cita", BigInteger),
+        column("id_paciente", BigInteger),
+        column("id_medico", BigInteger),
+        column("fecha_cita", Date),
+        column("hora_inicio", columnas["hora_inicio"]),
+        column("hora_fin", columnas["hora_fin"]),
+        column("estado", columnas["estado"]),
+    ]
+    if "id_clinica" in columnas:
+        elementos_cita.append(column("id_clinica", BigInteger))
+    citas = table("citas", *elementos_cita)
+    filtros = [citas.c.id_medico == id_medico, citas.c.fecha_cita == fecha]
+    if "id_clinica" in columnas:
+        filtros.append(or_(citas.c.id_clinica == tenant_id, citas.c.id_clinica.is_(None)))
+    else:
+        filtros.append(
+            citas.c.id_medico.in_(
+                db.query(Medico.id_medico)
+                .join(Usuario, Medico.id_usuario == Usuario.id_usuario)
+                .filter(Usuario.id_clinica == tenant_id)
+            )
+        )
+    consulta = select(
+        citas.c.id_cita,
+        citas.c.id_paciente,
+        citas.c.hora_inicio,
+        citas.c.hora_fin,
+        citas.c.estado,
+    ).select_from(citas).where(*filtros)
     resultado, advertencias = [], []
     for fila in db.execute(consulta).mappings():
         cita = dict(fila)
@@ -303,7 +403,7 @@ def _notificar(db, citas, bloqueo, tenant_id):
 
 def cambiar_bloqueo(db, id_bloqueo, accion, user, tenant_id):
     es_admin = accion in ("aprobar", "rechazar")
-    _contexto(user, tenant_id, ("ADMIN",) if es_admin else ("MEDICO", "RECEPCION"))
+    _contexto(db, user, tenant_id, ("ADMIN",) if es_admin else ("MEDICO", "RECEPCION"))
     bloqueo = _scope(db, BloqueoAgenda, user, tenant_id, revisar=es_admin).filter(
         BloqueoAgenda.id_bloqueo == id_bloqueo
     ).populate_existing().with_for_update(of=BloqueoAgenda).first()
@@ -328,7 +428,7 @@ def cambiar_bloqueo(db, id_bloqueo, accion, user, tenant_id):
 
 def disponibilidad(db, user, tenant_id, id_medico, fecha, id_servicio):
     medico = _medico(db, user, tenant_id, id_medico)
-    servicio = _servicio(db, id_servicio)
+    servicio = _servicio(db, id_servicio, tenant_id)
     horario = _scope(db, HorarioMedico, user, tenant_id, medico.id_medico).filter(
         HorarioMedico.id_servicio == id_servicio, HorarioMedico.dia_semana == fecha.isoweekday(),
         func.lower(HorarioMedico.estado) == "activo",

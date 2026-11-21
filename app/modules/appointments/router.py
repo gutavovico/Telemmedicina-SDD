@@ -1,4 +1,7 @@
 from fastapi import APIRouter
+from app.modules.appointments.doctor_entity_links.router import (
+    router as doctor_entity_links_router,
+)
 from app.modules.appointments.doctor_profile.router import (
     router as doctor_profile_router,
     router_especialidades,
@@ -9,6 +12,10 @@ from app.modules.appointments.live_queue.router import router as live_queue_rout
 from app.modules.appointments.specialist_search.router import router as specialist_search_router
 
 router = APIRouter()
+
+# 0. CU29 antes de /medicos/{id_medico}: /medicos/vinculaciones es literal.
+router.include_router(doctor_entity_links_router)
+router.include_router(doctor_entity_links_router, prefix="/api/v1")
 
 # 1. Rutas principales de Médicos (/medicos y /appointments/medicos)
 router.include_router(doctor_profile_router)

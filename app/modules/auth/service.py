@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy.orm import Session
@@ -143,7 +144,10 @@ def authenticate_user(db: Session, correo: str, password: str) -> Optional[Usuar
 
     # La credencial de onboarding se consume en el primer login. La sesión emitida
     # queda habilitada únicamente para reemplazarla por una contraseña definitiva.
-    from app.modules.tenants.temporary_credentials import get_must_change_credential
+    from app.modules.tenants.temporary_credentials import (
+        get_medical_temporary_credential,
+        get_must_change_credential,
+    )
 
     request = get_must_change_credential(db, user.id_usuario)
     if request is not None:
@@ -157,5 +161,27 @@ def authenticate_user(db: Session, correo: str, password: str) -> Optional[Usuar
         request.temporary_password_used_at = datetime.now(timezone.utc)
         db.add(request)
         db.commit()
+
+    # CU29: credencial de un médico global sin `Usuario.id_clinica`. El primer
+    # login válido la consume y sustituye el hash temporal por uno inutilizable.
+    medical = get_medical_temporary_credential(db, user.id_usuario)
+    if medical is not None:
+        if medical.usada_en is not None:
+            # La credencial ya se consumió: si el cambio obligatorio sigue
+            # pendiente, no se emite otra sesión; si ya cambió, el login es
+            # normal con la contraseña definitiva.
+            if medical.cambiada_en is None:
+                return None
+        else:
+            expira = medical.expira_en
+            if expira is not None and expira.tzinfo is None:
+                expira = expira.replace(tzinfo=timezone.utc)
+            if expira is None or datetime.now(timezone.utc) >= expira:
+                return None
+            medical.usada_en = datetime.now(timezone.utc)
+            user.password_hash = hash_password(secrets.token_urlsafe(48))
+            db.add(medical)
+            db.add(user)
+            db.commit()
 
     return user

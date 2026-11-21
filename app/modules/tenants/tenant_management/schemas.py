@@ -97,6 +97,7 @@ class TenantContextResponse(BaseModel):
     usuario_apellidos: str
     usuario_correo: str
     rol: str = ""
+    roles: List[str] = []
     permisos: List[str] = []
     es_super_admin: bool = False
 
