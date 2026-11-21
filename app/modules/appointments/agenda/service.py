@@ -74,8 +74,14 @@ def _medico(db, user, tenant_id, id_medico=None):
     return obtener_medico(db, id_medico, current_tenant_id=tenant_id)
 
 
-def _servicio(db, id_servicio):
-    servicio = db.get(ServicioMedico, id_servicio)
+def _servicio(db, id_servicio, tenant_id, *, bloquear=False):
+    query = db.query(ServicioMedico).filter(
+        ServicioMedico.id_servicio == id_servicio,
+        ServicioMedico.id_clinica == tenant_id,
+    )
+    if bloquear:
+        query = query.with_for_update(read=True)
+    servicio = query.populate_existing().first()
     if servicio is None:
         raise HTTPException(404, "Servicio médico no encontrado")
     if servicio.estado.lower() != "activo":
@@ -132,7 +138,10 @@ def _guardar(db):
 
 def listar_servicios(db, user, tenant_id):
     _contexto(user, tenant_id)
-    return db.query(ServicioMedico).order_by(ServicioMedico.id_servicio).all()
+    return db.query(ServicioMedico).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+    ).order_by(ServicioMedico.id_servicio).all()
 
 
 def listar_horarios(db, user, tenant_id, id_medico=None):
@@ -141,7 +150,7 @@ def listar_horarios(db, user, tenant_id, id_medico=None):
 
 def crear_horario(db: Session, datos: HorarioCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    _servicio(db, datos.id_servicio)
+    _servicio(db, datos.id_servicio, tenant_id, bloquear=True)
     _lock_medico(db, medico.id_medico, tenant_id)
     existente = _scope(db, HorarioMedico, user, tenant_id, medico.id_medico).filter(
         HorarioMedico.id_servicio == datos.id_servicio, HorarioMedico.dia_semana == datos.dia_semana
@@ -171,7 +180,7 @@ def cambiar_estado_horario(db, id_horario, estado, user, tenant_id):
     if not horario:
         raise HTTPException(404, "Horario no encontrado")
     if estado == "activo":
-        _servicio(db, horario.id_servicio)
+        _servicio(db, horario.id_servicio, tenant_id, bloquear=True)
     anterior = horario.estado
     horario.estado = estado
     _auditar(db, user, tenant_id, horario, "CAMBIAR_ESTADO", f"Disponibilidad: {anterior} -> {estado}")
@@ -191,7 +200,7 @@ def _segundos(hora: time):
 
 def crear_bloqueo(db: Session, datos: BloqueoCreate, user, tenant_id):
     medico = _medico(db, user, tenant_id, datos.id_medico)
-    servicio = _servicio(db, datos.id_servicio)
+    servicio = _servicio(db, datos.id_servicio, tenant_id, bloquear=True)
     if _rol(user) == "MEDICO" and datos.fecha != hoy_agenda() + timedelta(days=1):
         raise HTTPException(422, "El médico solo puede solicitar bloqueos para el día siguiente")
     inicio, fin = _segundos(datos.hora_inicio), _segundos(datos.hora_fin)
@@ -343,7 +352,7 @@ def cambiar_bloqueo(db, id_bloqueo, accion, user, tenant_id):
 
 def disponibilidad(db, user, tenant_id, id_medico, fecha, id_servicio):
     medico = _medico(db, user, tenant_id, id_medico)
-    servicio = _servicio(db, id_servicio)
+    servicio = _servicio(db, id_servicio, tenant_id)
     horario = _scope(db, HorarioMedico, user, tenant_id, medico.id_medico).filter(
         HorarioMedico.id_servicio == id_servicio, HorarioMedico.dia_semana == fecha.isoweekday(),
         func.lower(HorarioMedico.estado) == "activo",

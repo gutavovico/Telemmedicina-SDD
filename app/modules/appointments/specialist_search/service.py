@@ -60,7 +60,7 @@ def calcular_disponibilidad_medico(
         HorarioMedico.id_medico == medico.id_medico,
         func.lower(HorarioMedico.estado) == "activo",
     )
-    if id_servicio_filtro:
+    if id_servicio_filtro is not None:
         query_horarios = query_horarios.filter(HorarioMedico.id_servicio == id_servicio_filtro)
     horarios = query_horarios.all()
 
@@ -77,6 +77,7 @@ def calcular_disponibilidad_medico(
     servicios_ids = list({h.id_servicio for h in horarios})
     servicios_db = db.query(ServicioMedico).filter(
         ServicioMedico.id_servicio.in_(servicios_ids),
+        ServicioMedico.id_clinica == medico.id_clinica,
         func.lower(ServicioMedico.estado) == "activo",
     ).all()
     servicios_map = {s.id_servicio: s for s in servicios_db}
@@ -397,7 +398,7 @@ def obtener_disponibilidad_especialista(
             ServicioMedico.id_clinica == tenant_id,
         )
     )
-    if id_servicio:
+    if id_servicio is not None:
         servicios_query = servicios_query.filter(ServicioMedico.id_servicio == id_servicio)
 
     servicios_db = servicios_query.distinct().all()

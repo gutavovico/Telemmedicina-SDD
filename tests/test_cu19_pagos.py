@@ -272,6 +272,46 @@ class CU19PagosTestCase(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         self.assertEqual(resp.json()["total"], 1)
 
+    def test_tarifa_cero_excluye_cita_y_no_crea_pago_ni_sesion(self):
+        with self.SessionLocal() as db:
+            db.get(ServicioMedico, 1).costo = 0
+            db.commit()
+        self.assertEqual(self.client.get("/pagos/pendientes").json(), {"total": 0, "items": []})
+        with patch.object(payments_service, "stripe_habilitado", return_value=True), \
+                patch.object(payments_service, "_crear_sesion_stripe") as stripe:
+            for canal in ("WEB", "MOVIL"):
+                resp = self.client.post("/pagos/checkout", json={"id_cita": 1, "canal": canal})
+                self.assertEqual(resp.status_code, 409, resp.text)
+                self.assertEqual(resp.json(), {"detail": "Esta cita no requiere pago"})
+            stripe.assert_not_called()
+        with self.SessionLocal() as db:
+            self.assertEqual(db.query(Pago).count(), 0)
+            self.assertEqual(db.get(Cita, 1).estado, "PENDIENTE")
+            db.get(Cita, 1).id_servicio = None
+            db.commit()
+        sin_tarifa = self.client.get("/pagos/pendientes").json()["items"][0]
+        self.assertEqual(float(sin_tarifa["monto"]), float(settings.PAYMENT_DEFAULT_AMOUNT))
+
+    def test_tarifa_cero_conserva_pago_emitido_y_su_comprobante(self):
+        resp = self.client.post("/pagos/checkout", json={"id_cita": 1})
+        self.assertEqual(resp.status_code, 201, resp.text)
+        inicial = resp.json()
+        with self.SessionLocal() as db:
+            db.get(ServicioMedico, 1).costo = 0
+            db.commit()
+        listado = self.client.get("/pagos/pendientes").json()["items"][0]
+        self.assertEqual(listado["id_pago"], inicial["id_pago"])
+        self.assertEqual(listado["monto"], inicial["monto"])
+        reintento = self.client.post("/pagos/checkout", json={"id_cita": 1}).json()
+        self.assertEqual(reintento["id_pago"], inicial["id_pago"])
+        self.assertEqual(reintento["url_checkout"], inicial["url_checkout"])
+        aprobado = self.client.post(f"/pagos/{inicial['id_pago']}/simular-pago")
+        self.assertEqual(aprobado.status_code, 200, aprobado.text)
+        pagado = self.client.post("/pagos/checkout", json={"id_cita": 1}).json()
+        self.assertEqual(pagado["id_pago"], inicial["id_pago"])
+        self.assertEqual(pagado["monto"], inicial["monto"])
+        self.assertEqual(pagado["comprobante"], aprobado.json()["comprobante"])
+
     def test_paciente_no_puede_pagar_cita_ajena(self):
         self._mock_user(self.user_otro)
         resp = self.client.post("/pagos/checkout", json={"id_cita": 1})

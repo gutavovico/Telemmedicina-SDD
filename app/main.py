@@ -1,3 +1,4 @@
+from app.modules.tenants.entity_configuration.router import router as entity_configuration_router
 from app.modules.tenants.subscription_changes.router import router as subscription_changes_router
 from app.modules.tenants.subscription_changes import worker as subscription_worker
 from contextlib import asynccontextmanager
@@ -108,6 +109,7 @@ app.include_router(auth_router)
 # Contexto de Tenant y ClÃ­nicas (SaaS multitenant)
 app.include_router(clinicas_router)
 app.include_router(clinicas_router, prefix="/api/v1")
+app.include_router(entity_configuration_router)
 app.include_router(tenant_management_router)
 app.include_router(tenant_management_router, prefix="/api/v1")
 app.include_router(subscription_payments_router)
