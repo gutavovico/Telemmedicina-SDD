@@ -1,7 +1,8 @@
 import { Injectable, computed, effect, inject, signal } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpContext, HttpParams } from '@angular/common/http';
 import { Observable, catchError, of, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { SKIP_AUTH_LOGOUT } from '../interceptors/auth.interceptor';
 import { AuthService } from './auth.service';
 import { WebPushService } from './web-push.service';
 import { normalizeAppRole } from '../models/auth.models';
@@ -60,13 +61,17 @@ export class NotificacionService {
     if (!this.authService.isAuthenticated()) {
       return of(null);
     }
-    return this.http.get<NotificacionResumenDTO>(`${this.baseUrl}/resumen-no-leidas`).pipe(
-      tap((res) => {
-        this.conteoNoLeidas.set(res.no_leidas ?? 0);
-        this.totalNotificaciones.set(res.total ?? 0);
-      }),
-      catchError(() => of(null)),
-    );
+    return this.http
+      .get<NotificacionResumenDTO>(`${this.baseUrl}/resumen-no-leidas`, {
+        context: new HttpContext().set(SKIP_AUTH_LOGOUT, true),
+      })
+      .pipe(
+        tap((res) => {
+          this.conteoNoLeidas.set(res.no_leidas ?? 0);
+          this.totalNotificaciones.set(res.total ?? 0);
+        }),
+        catchError(() => of(null)),
+      );
   }
 
   cargarBandeja(

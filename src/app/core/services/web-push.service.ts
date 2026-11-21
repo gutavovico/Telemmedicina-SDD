@@ -1,7 +1,8 @@
 import { Injectable, inject, signal } from '@angular/core';
-import { HttpClient } from '@angular/common/http';
+import { HttpClient, HttpContext } from '@angular/common/http';
 import { Observable, from, of, switchMap, catchError, tap } from 'rxjs';
 import { environment } from '../../../environments/environment';
+import { SKIP_AUTH_LOGOUT } from '../interceptors/auth.interceptor';
 import { obtenerDispositivoId } from '../utils/device-id.util';
 import {
   DispositivoDTO,
@@ -42,32 +43,38 @@ export class WebPushService {
       return of(null);
     }
 
-    return this.http.get<WebPushConfigDTO>(`${this.baseUrl}/web-push/config`).pipe(
-      switchMap((cfg) => {
-        if (!cfg?.habilitado || !cfg.public_key) {
-          return of(null);
-        }
-        return from(this.obtenerOSuscribirPush(cfg.public_key));
-      }),
-      switchMap((sub) => {
-        if (!sub) {
-          return of(null);
-        }
-        const json = sub.toJSON();
-        const dto: WebPushSubscriptionDTO = {
-          endpoint: sub.endpoint,
-          keys: {
-            p256dh: json.keys?.['p256dh'] || '',
-            auth: json.keys?.['auth'] || '',
-          },
-          dispositivo_id: obtenerDispositivoId(),
-        };
-        return this.http.post<DispositivoDTO>(`${this.baseUrl}/web-push/subscripcion`, dto).pipe(
-          tap(() => this.suscrito.set(true)),
-        );
-      }),
-      catchError(() => of(null)),
-    );
+    const backgroundContext = new HttpContext().set(SKIP_AUTH_LOGOUT, true);
+
+    return this.http
+      .get<WebPushConfigDTO>(`${this.baseUrl}/web-push/config`, { context: backgroundContext })
+      .pipe(
+        switchMap((cfg) => {
+          if (!cfg?.habilitado || !cfg.public_key) {
+            return of(null);
+          }
+          return from(this.obtenerOSuscribirPush(cfg.public_key));
+        }),
+        switchMap((sub) => {
+          if (!sub) {
+            return of(null);
+          }
+          const json = sub.toJSON();
+          const dto: WebPushSubscriptionDTO = {
+            endpoint: sub.endpoint,
+            keys: {
+              p256dh: json.keys?.['p256dh'] || '',
+              auth: json.keys?.['auth'] || '',
+            },
+            dispositivo_id: obtenerDispositivoId(),
+          };
+          return this.http
+            .post<DispositivoDTO>(`${this.baseUrl}/web-push/subscripcion`, dto, {
+              context: backgroundContext,
+            })
+            .pipe(tap(() => this.suscrito.set(true)));
+        }),
+        catchError(() => of(null)),
+      );
   }
 
   revocarDispositivo(): Observable<void> {

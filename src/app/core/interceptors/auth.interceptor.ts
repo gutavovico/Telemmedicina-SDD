@@ -1,8 +1,16 @@
-import { HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
+import { HttpContextToken, HttpErrorResponse, HttpInterceptorFn } from '@angular/common/http';
 import { inject } from '@angular/core';
 import { catchError, switchMap, throwError } from 'rxjs';
 import { AuthService } from '../services/auth.service';
 import { environment } from '../../../environments/environment';
+
+/**
+ * Permite marcar peticiones de fondo no críticas (ej. polling del contador de
+ * notificaciones) para que un 401 sin refresh token no cierre forzadamente la
+ * sesión activa ni redirija a /login. El cierre explícito por inactividad (CU23)
+ * siempre se respeta.
+ */
+export const SKIP_AUTH_LOGOUT = new HttpContextToken<boolean>(() => false);
 
 export const authInterceptor: HttpInterceptorFn = (req, next) => {
   const authService = inject(AuthService);
@@ -78,6 +86,7 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
         !req.url.includes('/auth/refresh') &&
         !req.url.includes('/auth/register')
       ) {
+        const skipLogout = req.context.get(SKIP_AUTH_LOGOUT);
         const refreshToken = authService.getRefreshToken();
         if (refreshToken) {
           return authService.refreshToken().pipe(
@@ -90,11 +99,13 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
               return next(retryReq);
             }),
             catchError((refreshError) => {
-              authService.logoutLocal();
+              if (!skipLogout) {
+                authService.logoutLocal();
+              }
               return throwError(() => refreshError);
             })
           );
-        } else {
+        } else if (!skipLogout) {
           authService.logoutLocal();
         }
       }
