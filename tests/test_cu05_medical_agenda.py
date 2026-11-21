@@ -60,8 +60,9 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
                 foto_perfil TEXT, estado TEXT, fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
             "CREATE TABLE especialidades (id_especialidad INTEGER PRIMARY KEY, nombre TEXT, descripcion TEXT, estado TEXT)",
             "CREATE TABLE medico_especialidad (id_medico INTEGER, id_especialidad INTEGER, es_principal BOOLEAN)",
-            """CREATE TABLE servicios_medicos (id_servicio INTEGER PRIMARY KEY, nombre TEXT NOT NULL,
-                descripcion TEXT, hora_inicio TIME NOT NULL, hora_fin TIME NOT NULL,
+            """CREATE TABLE servicios_medicos (id_servicio INTEGER PRIMARY KEY, id_clinica INTEGER,
+                tenant_id TEXT, nombre TEXT NOT NULL, descripcion TEXT,
+                modalidad TEXT NOT NULL DEFAULT 'PRESENCIAL', hora_inicio TIME NOT NULL, hora_fin TIME NOT NULL,
                 duracion_minutos INTEGER NOT NULL, costo DECIMAL(10,2) NOT NULL, estado TEXT NOT NULL)""",
             """CREATE TABLE horarios_medicos (id_horario INTEGER PRIMARY KEY, id_medico INTEGER NOT NULL,
                 id_servicio INTEGER NOT NULL, dia_semana INTEGER NOT NULL, estado TEXT NOT NULL,
@@ -73,9 +74,13 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
                 id_usuario INTEGER NOT NULL, tabla_afectada TEXT, registro_id INTEGER, accion TEXT NOT NULL,
                 descripcion TEXT, datos_anteriores TEXT, datos_nuevos TEXT, direccion_ip TEXT,
                 fecha_hora TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
-            """CREATE TABLE notificaciones (id_notificacion INTEGER PRIMARY KEY, id_usuario INTEGER NOT NULL,
-                tipo TEXT, canal TEXT, titulo TEXT, mensaje TEXT, fecha_programada TIMESTAMP,
-                fecha_envio TIMESTAMP, fecha_lectura TIMESTAMP, estado TEXT NOT NULL)""",
+            """CREATE TABLE notificaciones (id_notificacion INTEGER PRIMARY KEY, id_clinica INTEGER,
+                id_usuario INTEGER NOT NULL, outbox_id INTEGER, rol_destinatario TEXT,
+                tipo TEXT, categoria TEXT DEFAULT 'SISTEMA', canal TEXT, canal_badge TEXT,
+                titulo TEXT, mensaje TEXT, recurso_tipo TEXT, recurso_id TEXT, enlace_accion TEXT,
+                payload_extra TEXT, fecha_programada TIMESTAMP,
+                fecha_envio TIMESTAMP, fecha_lectura TIMESTAMP, estado TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)""",
             "CREATE TABLE pacientes (id_paciente INTEGER PRIMARY KEY, id_usuario INTEGER, id_clinica INTEGER)",
             """CREATE TABLE citas (id_cita INTEGER PRIMARY KEY, id_paciente INTEGER, id_medico INTEGER,
                 id_especialidad INTEGER, fecha_cita DATE, hora_inicio TIME, hora_fin TIME,
@@ -101,10 +106,13 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
                     {"id":uid,"clinic":clinic,"role":role,"email":f"u{uid}@test.local"})
             conn.exec_driver_sql("""INSERT INTO medicos (id_medico,id_usuario,id_clinica,matricula_profesional,estado)
                 VALUES (20,2,1,'M20','activo'), (50,5,2,'M50','activo'), (60,6,1,'M60','activo')""")
-            conn.exec_driver_sql("""INSERT INTO servicios_medicos VALUES
-                (1,'Consulta general',NULL,'08:00:00','13:00:00',30,100,'activo'),
-                (2,'Consulta especializada',NULL,'13:00:00','16:00:00',45,150,'activo'),
-                (3,'Evaluación médica',NULL,'16:00:00','18:00:00',60,200,'activo')""")
+            conn.exec_driver_sql("""INSERT INTO servicios_medicos
+                (id_servicio,id_clinica,nombre,descripcion,hora_inicio,hora_fin,duracion_minutos,costo,estado) VALUES
+                (1,1,'Consulta general',NULL,'08:00:00','13:00:00',30,100,'activo'),
+                (2,1,'Consulta especializada',NULL,'13:00:00','16:00:00',45,150,'activo'),
+                (3,1,'Evaluación médica',NULL,'16:00:00','18:00:00',60,200,'activo'),
+                (4,2,'Ajeno',NULL,'08:00:00','13:00:00',30,100,'activo'),
+                (5,NULL,'Heredado',NULL,'08:00:00','13:00:00',30,100,'activo')""")
             conn.exec_driver_sql("INSERT INTO pacientes VALUES (40,4,1), (90,9,2), (41,NULL,1)")
         self._as(2)
 
@@ -135,10 +143,12 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.text)
         return response.json()
 
-    def test_servicios_globales_sin_crud(self):
+    def test_servicios_de_la_clinica_sin_crud(self):
         response = self.client.get(PREFIX + "/servicios")
         self.assertEqual(response.status_code, 200)
-        self.assertEqual([s["id_servicio"] for s in response.json()], [1,2,3])
+        self.assertEqual([s["id_servicio"] for s in response.json()], [1, 2, 3])
+        self.assertEqual(self._horario(id_servicio=4).status_code, 404)
+        self.assertEqual(self._bloqueo(id_servicio=5).status_code, 404)
         self.assertEqual(self.client.post(PREFIX + "/servicios", json={}).status_code, 405)
 
     def test_crear_horario_propio_y_duplicado(self):
@@ -344,11 +354,15 @@ class CU05MedicalAgendaTestCase(unittest.TestCase):
             self.assertEqual(conn.exec_driver_sql("SELECT COUNT(*) FROM notificaciones").scalar(),0)
 
     def test_servicio_inactivo_y_no_existente(self):
+        self.assertEqual(self._horario().status_code, 201)
         with self.engine.begin() as conn:
             conn.exec_driver_sql("UPDATE servicios_medicos SET estado='inactivo' WHERE id_servicio=1")
         self.assertEqual(self._bloqueo().status_code,409)
         self.assertEqual(self._horario().status_code,409)
         self.assertEqual(self._horario(id_servicio=999).status_code,404)
+        ofrecidos = self.client.get(PREFIX + "/servicios").json()
+        self.assertEqual([servicio["id_servicio"] for servicio in ofrecidos], [2, 3])
+        self.assertEqual(self.client.get(PREFIX + "/horarios").json()[0]["id_servicio"], 1)
 
     def test_sin_autenticacion_y_rol_paciente(self):
         app.dependency_overrides.pop(get_current_user,None)

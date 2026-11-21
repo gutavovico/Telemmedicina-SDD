@@ -1,5 +1,6 @@
 import json
 from typing import Any, Dict, Optional, Union
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import Session
 
 from app.modules.auth.models import Auditoria
@@ -50,4 +51,38 @@ def registrar_auditoria(
     )
     db.add(auditoria)
     db.flush()
+    return auditoria
+
+
+async def registrar_auditoria_async(
+    db: AsyncSession,
+    *,
+    id_usuario: int,
+    id_clinica: Optional[int],
+    tabla_afectada: str,
+    registro_id: Optional[int] = None,
+    accion: str,
+    descripcion: Optional[str] = None,
+    datos_anteriores: Optional[Union[Dict[str, Any], str]] = None,
+    datos_nuevos: Optional[Union[Dict[str, Any], str]] = None,
+    direccion_ip: Optional[str] = None,
+) -> Auditoria:
+    """Registra auditoría dentro de la ``AsyncSession`` y transacción activas.
+
+    No hace commit ni rollback: quien invoca controla la transacción para que
+    un fallo de auditoría revierta también el cambio de negocio (CU29).
+    """
+    auditoria = Auditoria(
+        id_usuario=id_usuario,
+        id_clinica=id_clinica,
+        tabla_afectada=tabla_afectada,
+        registro_id=registro_id,
+        accion=accion,
+        descripcion=descripcion,
+        datos_anteriores=_to_jsonb(datos_anteriores),
+        datos_nuevos=_to_jsonb(datos_nuevos),
+        direccion_ip=direccion_ip,
+    )
+    db.add(auditoria)
+    await db.flush()
     return auditoria

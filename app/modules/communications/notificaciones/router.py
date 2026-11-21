@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import json
 import uuid
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -66,16 +67,43 @@ def registrar_web_push(
 
 @router.post(
     "/dispositivos",
-    response_model=DispositivoDTO,
     status_code=status.HTTP_201_CREATED,
-    summary="Registrar dispositivo móvil (FLUTTER) o PWA para recepción de Push",
+    summary="Registrar dispositivo móvil (FLUTTER / CU19 FCM) o PWA para recepción de Push",
 )
 def registrar_dispositivo(
-    dto: RegistroDispositivoDTO,
+    payload: Dict[str, Any] = Body(...),
     usuario: Usuario = Depends(get_current_user),
     id_clinica: Optional[int] = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
 ):
+    # Compatibilidad con el contrato CU19 ({token, plataforma}) usado por pagos móvil
+    if "token" in payload and "dispositivo_id" not in payload:
+        from app.modules.notificaciones.router import (
+            DispositivoCreate,
+            registrar_dispositivo as registrar_dispositivo_cu19,
+        )
+
+        try:
+            dto_cu19 = DispositivoCreate.model_validate(payload)
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail=exc.errors(),
+            ) from exc
+        return registrar_dispositivo_cu19(
+            payload=dto_cu19,
+            db=db,
+            user=usuario,
+            tenant_id=id_clinica,
+        )
+
+    try:
+        dto = RegistroDispositivoDTO.model_validate(payload)
+    except ValidationError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail=exc.errors(),
+        ) from exc
     srv = NotificacionService(db)
     res = srv.registrar_dispositivo(usuario, dto, id_clinica=id_clinica)
     db.commit()
@@ -97,14 +125,28 @@ def listar_dispositivos(
 @router.delete(
     "/dispositivos/{dispositivo_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Revocar un dispositivo registrado (recomendado en cierre de sesión)",
+    summary="Revocar un dispositivo registrado (CU20 y compatibilidad CU19)",
 )
 def revocar_dispositivo(
     dispositivo_id: str,
     usuario: Usuario = Depends(get_current_user),
+    id_clinica: Optional[int] = Depends(get_current_tenant_id),
     db: Session = Depends(get_db),
 ):
-    NotificacionService(db).revocar_dispositivo(usuario.id_usuario, dispositivo_id)
+    revocados = NotificacionService(db).revocar_dispositivo(
+        usuario.id_usuario, dispositivo_id
+    )
+    if revocados == 0 and dispositivo_id.isdigit():
+        from app.modules.notificaciones.router import (
+            revocar_dispositivo as revocar_dispositivo_cu19,
+        )
+
+        return revocar_dispositivo_cu19(
+            id_dispositivo=int(dispositivo_id),
+            db=db,
+            user=usuario,
+            tenant_id=id_clinica,
+        )
     db.commit()
 
 

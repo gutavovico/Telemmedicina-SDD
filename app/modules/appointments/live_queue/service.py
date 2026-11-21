@@ -9,10 +9,13 @@ from datetime import date, datetime, time, timedelta, timezone
 import unicodedata
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.appointments.agenda.schemas import BloqueoResponse
+from app.modules.appointments.doctor_entity_links.context import (
+    resolve_active_medical_link_for_tenant,
+)
 from app.modules.appointments.doctor_profile.service import (
     obtener_medico,
     obtener_medico_por_usuario,
@@ -79,17 +82,34 @@ def _a_hora(valor):
     return None
 
 
-def _exigir_clinica(user: Usuario, tenant_id: int | None) -> None:
-    if user.id_clinica is None or tenant_id != user.id_clinica:
+def _rol_efectivo(db: Session, user: Usuario, tenant_id: int) -> str:
+    contexto = resolve_active_medical_link_for_tenant(db, user, tenant_id)
+    if contexto is not None:
+        roles = {(rol or "").strip().upper() for rol in contexto.roles}
+        if roles & {"MEDICO", "MÉDICO", "MEDICO_ESPECIALISTA"}:
+            return "MEDICO"
+        if "RECEPCION" in roles or "RECEPCIÓN" in roles:
+            return "RECEPCION"
+        return ""
+    return _rol(user)
+
+
+def _exigir_clinica(db: Session, user: Usuario, tenant_id: int | None) -> None:
+    if tenant_id is None:
+        raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
+    contexto = resolve_active_medical_link_for_tenant(db, user, int(tenant_id))
+    if contexto is not None:
+        return
+    if user.id_clinica is None or int(tenant_id) != int(user.id_clinica):
         raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
 
 
 def _medico_staff(db: Session, user: Usuario, tenant_id: int | None, id_medico: int | None = None) -> Medico:
     """MEDICO solo su fila; RECEPCION exige id_medico. Sin ADMIN de clínica (matriz HU CU08)."""
-    rol = _rol(user)
+    rol = _rol_efectivo(db, user, int(tenant_id)) if tenant_id is not None else ""
     if rol not in ("MEDICO", "RECEPCION"):
         raise HTTPException(403, "Operación de fila virtual restringida a médico o recepción (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     if rol == "MEDICO":
         medico = obtener_medico_por_usuario(db, user.id_usuario, current_tenant_id=tenant_id)
         if id_medico is not None and id_medico != medico.id_medico:
@@ -122,8 +142,7 @@ def _citas_fila(db: Session, id_medico: int, fecha: date, tenant_id: int) -> lis
         .filter(
             Cita.id_medico == id_medico,
             Cita.fecha_cita == fecha,
-            Usuario.id_clinica == tenant_id,
-            or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)),
+            Cita.id_clinica == tenant_id,
         )
         .all()
     )
@@ -132,29 +151,32 @@ def _citas_fila(db: Session, id_medico: int, fecha: date, tenant_id: int) -> lis
     return en_fila
 
 
-def _duracion_medico(db: Session, id_medico: int) -> int:
+def _duracion_medico(db: Session, id_medico: int, tenant_id: int) -> int:
+    duraciones = db.query(ServicioMedico.duracion_minutos).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+        ServicioMedico.duracion_minutos > 0,
+    )
     vals = [
         r[0]
-        for r in db.query(ServicioMedico.duracion_minutos)
+        for r in duraciones
         .join(HorarioMedico, HorarioMedico.id_servicio == ServicioMedico.id_servicio)
-        .filter(HorarioMedico.id_medico == id_medico, ServicioMedico.duracion_minutos > 0)
+        .filter(HorarioMedico.id_medico == id_medico)
         .all()
     ]
     if not vals:
-        vals = [
-            r[0]
-            for r in db.query(ServicioMedico.duracion_minutos)
-            .filter(ServicioMedico.duracion_minutos > 0)
-            .all()
-        ]
+        vals = [r[0] for r in duraciones.all()]
     if not vals:
         return DURACION_DEFECTO_MIN
     return max(1, round(sum(vals) / len(vals)))
 
 
-def _duracion_cita(db: Session, cita: Cita, dur_medico: int) -> int:
+def _duracion_cita(db: Session, cita: Cita, dur_medico: int, tenant_id: int) -> int:
     if cita.id_servicio:
-        servicio = db.get(ServicioMedico, cita.id_servicio)
+        servicio = db.query(ServicioMedico).filter(
+            ServicioMedico.id_servicio == cita.id_servicio,
+            or_(ServicioMedico.id_clinica == tenant_id, ServicioMedico.id_clinica.is_(None)),
+        ).first()
         if servicio is not None and (servicio.duracion_minutos or 0) > 0:
             return int(servicio.duracion_minutos)
     return dur_medico
@@ -189,14 +211,14 @@ def computar_cola(db: Session, id_medico: int, fecha: date, tenant_id: int, ahor
     ahora = ahora or ahora_cola()
     citas = _citas_fila(db, id_medico, fecha, tenant_id)
     medico = db.get(Medico, id_medico)
-    dur_medico = _duracion_medico(db, id_medico)
+    dur_medico = _duracion_medico(db, id_medico, tenant_id)
     pausa = _pausa_vigente(db, id_medico, fecha, ahora.time(), tenant_id)
     pausa_min = pausa[0] if pausa else 0
 
     entradas, acumulado = [], 0
     for posicion, cita in enumerate(citas, start=1):
         estado = (cita.estado or "PENDIENTE").upper()
-        duracion = _duracion_cita(db, cita, dur_medico)
+        duracion = _duracion_cita(db, cita, dur_medico, tenant_id)
         eta = 0 if estado == "EN_CURSO" else acumulado + pausa_min
         hora = _a_hora(cita.hora_inicio)
         entradas.append({
@@ -256,7 +278,7 @@ def ver_cola(db: Session, user: Usuario, tenant_id: int, id_medico: int | None, 
 def mi_turno(db: Session, user: Usuario, tenant_id: int) -> dict:
     if _rol(user) != "PACIENTE" and user.id_rol != 4:
         raise HTTPException(403, "La consulta de turno propio es exclusiva del paciente (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     paciente = (
         db.query(Paciente)
         .join(Usuario, Paciente.id_usuario == Usuario.id_usuario)
@@ -313,8 +335,7 @@ def _cita_en_fila(db: Session, id_cita: int, id_medico: int, tenant_id: int) -> 
         .filter(
             Cita.id_cita == id_cita,
             Cita.id_medico == id_medico,
-            Usuario.id_clinica == tenant_id,
-            or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)),
+            Cita.id_clinica == tenant_id,
         )
         .first()
     )
@@ -361,10 +382,10 @@ def _avanzar_tras_marcar(db: Session, medico: Medico, fecha: date, tenant_id: in
 def _resolver_cita_staff(db: Session, user: Usuario, tenant_id: int, id_cita: int):
     """Resuelve (cita, medico) para avanzar/perdida: MEDICO solo su fila (404 ajeno),
     RECEPCION cualquier cita del tenant (404 si es de otra clínica)."""
-    rol = _rol(user)
+    rol = _rol_efectivo(db, user, tenant_id)
     if rol not in ("MEDICO", "RECEPCION"):
         raise HTTPException(403, "Operación de fila virtual restringida a médico o recepción (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     if rol == "MEDICO":
         medico = obtener_medico_por_usuario(db, user.id_usuario, current_tenant_id=tenant_id)
         cita = _cita_en_fila(db, id_cita, medico.id_medico, tenant_id)
@@ -373,8 +394,7 @@ def _resolver_cita_staff(db: Session, user: Usuario, tenant_id: int, id_cita: in
         db.query(Cita)
         .join(Medico, Cita.id_medico == Medico.id_medico)
         .join(Usuario, Medico.id_usuario == Usuario.id_usuario)
-        .filter(Cita.id_cita == id_cita, Usuario.id_clinica == tenant_id,
-                or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)))
+        .filter(Cita.id_cita == id_cita, Cita.id_clinica == tenant_id)
         .all()
     )
     if not candidatas:
@@ -410,15 +430,18 @@ def registrar_pausa(db: Session, user: Usuario, tenant_id: int, datos: PausaCrea
     hora_inicio, hora_fin = _a_hora(datos.hora_inicio), _a_hora(datos.hora_fin)
     if hora_inicio is None or hora_fin is None or hora_inicio >= hora_fin:
         raise HTTPException(400, "La franja de pausa es inválida")
+    servicios_activos = db.query(ServicioMedico).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+    ).order_by(ServicioMedico.id_servicio).with_for_update(read=True, of=ServicioMedico)
     servicio = (
-        db.query(ServicioMedico)
+        servicios_activos
         .join(HorarioMedico, HorarioMedico.id_servicio == ServicioMedico.id_servicio)
-        .filter(HorarioMedico.id_medico == medico.id_medico)
-        .order_by(ServicioMedico.id_servicio)
+        .filter(HorarioMedico.id_medico == medico.id_medico, func.lower(HorarioMedico.estado) == "activo")
         .first()
     )
     if servicio is None:
-        servicio = db.query(ServicioMedico).order_by(ServicioMedico.id_servicio).first()
+        servicio = servicios_activos.first()
     if servicio is None:
         raise HTTPException(409, "El médico no tiene servicios configurados para registrar la pausa")
     solapa = (

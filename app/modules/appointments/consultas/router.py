@@ -4,8 +4,11 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, get_required_tenant_id
 from app.modules.auth.models import Usuario
+from app.modules.appointments.doctor_entity_links.dependencies import (
+    require_active_medical_link,
+)
 from app.modules.appointments.consultas import service
 from app.modules.appointments.consultas.schemas import (
     CitaCreate,
@@ -15,7 +18,10 @@ from app.modules.appointments.consultas.schemas import (
     HorarioSlot,
 )
 
-router = APIRouter(tags=["Citas y Consultas (Appointments)"])
+router = APIRouter(
+    tags=["Citas y Consultas (Appointments)"],
+    dependencies=[Depends(require_active_medical_link)],
+)
 
 
 @router.post(
@@ -29,9 +35,14 @@ def agendar_cita(
     datos: CitaCreate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
     try:
-        return service.crear_cita(db, datos)
+        return service.crear_cita(
+            db, datos, tenant_id=tenant_id, current_user=current_user
+        )
+    except HTTPException:
+        raise
     except ValueError as ve:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -62,6 +73,7 @@ def listar_citas(
     page_size: int = Query(50, ge=1, le=100, description="Cantidad de registros por página"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
     if current_user.id_rol == 4:
         from app.modules.medical_records.models import Paciente
@@ -85,7 +97,9 @@ def listar_citas(
         id_paciente=id_paciente,
         tipo_consulta=tipo_consulta,
         page=page,
-        page_size=page_size
+        page_size=page_size,
+        tenant_id=tenant_id,
+        current_user=current_user,
     )
 
 
@@ -100,8 +114,11 @@ def obtener_horarios(
     fecha: date = Query(..., description="Fecha a consultar"),
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
-    return service.obtener_horarios_disponibles(db, id_medico, fecha)
+    return service.obtener_horarios_disponibles(
+        db, id_medico, fecha, tenant_id=tenant_id
+    )
 
 
 @router.get(
@@ -114,8 +131,11 @@ def obtener_cita(
     id_cita: int,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
-    cita = service.obtener_cita_por_id(db, id_cita)
+    cita = service.obtener_cita_por_id(
+        db, id_cita, tenant_id=tenant_id, current_user=current_user
+    )
     if not cita:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -135,8 +155,11 @@ def actualizar_cita(
     datos: CitaUpdate,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
-    cita_actualizada = service.actualizar_cita(db, id_cita, datos)
+    cita_actualizada = service.actualizar_cita(
+        db, id_cita, datos, tenant_id=tenant_id, current_user=current_user
+    )
     if not cita_actualizada:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -155,8 +178,11 @@ def eliminar_cita(
     id_cita: int,
     db: Session = Depends(get_db),
     current_user: Usuario = Depends(get_current_user),
+    tenant_id: int = Depends(get_required_tenant_id),
 ):
-    eliminado = service.eliminar_cita(db, id_cita)
+    eliminado = service.eliminar_cita(
+        db, id_cita, tenant_id=tenant_id, current_user=current_user
+    )
     if not eliminado:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

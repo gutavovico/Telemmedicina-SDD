@@ -1,3 +1,5 @@
+
+
 # Entornos Virtuales
 venv/
 .venv/
@@ -22,6 +24,7 @@ htmlcov/
 .env.*
 !.env.example
 .secrets/
+secrets/
 backups/
 
 # IDEs y Editores

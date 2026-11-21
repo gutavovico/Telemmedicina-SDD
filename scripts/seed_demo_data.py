@@ -8,7 +8,7 @@ from pathlib import Path
 # Agregar directorio raíz al PYTHONPATH
 sys.path.insert(0, os.path.realpath(os.path.join(os.path.dirname(__file__), "..")))
 
-from sqlalchemy import func
+from sqlalchemy import func, text
 from sqlalchemy.orm import Session
 from app.core.database import SessionLocal, engine
 from app.core.security import hash_password
@@ -28,6 +28,25 @@ from app.modules.medical_records.hce.models import HistoriaClinica, Consulta, Di
 from app.modules.medical_records.clinical_documents.models import DocumentoClinico
 from app.modules.communications.models import MensajeChatCita
 from app.modules.medical_records.prescriptions.models import Medicamento
+from scripts.cu29_admin_roles import reparar_roles_admin_demo
+
+
+def _resync_pk_sequence(db: Session, tabla: str, columna: str) -> None:
+    """Alinea la secuencia del PK tras inserts con id explícito (solo PostgreSQL).
+
+    El seed crea clínicas con id_clinica=1 y 2 sin usar la secuencia, por lo que
+    queda en 1 y el primer insert posterior (p. ej. aprobar un alta en CU32)
+    choca con «clinicas_pkey».
+    """
+    if db.bind.dialect.name != "postgresql":
+        return
+    seq = db.execute(
+        text("SELECT pg_get_serial_sequence(:t, :c)"), {"t": tabla, "c": columna}
+    ).scalar()
+    if not seq:
+        return
+    max_id = db.execute(text(f'SELECT COALESCE(MAX("{columna}"), 0) FROM "{tabla}"')).scalar()
+    db.execute(text("SELECT setval(:s, GREATEST(:v, 1))"), {"s": seq, "v": max_id})
 
 
 def _pdf_placeholder_bytes(titulo: str, lineas: list | None = None) -> bytes:
@@ -137,6 +156,7 @@ def seed_all():
             print("  [=] Clínica Norte verificada")
 
         db.flush()
+        _resync_pk_sequence(db, "clinicas", "id_clinica")
 
         # -------------------------------------------------------------
         # 2. Roles Canónicos
@@ -386,6 +406,17 @@ def seed_all():
                 print(f"  [=] Usuario actualizado: {u_data['correo']}")
             db.flush()
             user_map[u_data["correo"]] = user
+
+        # CU29 exige que el rol ADMIN y el usuario pertenezcan a la misma
+        # clínica. El seed legacy usaba un único rol ADMIN global para ambos
+        # tenants. Reparar después de crear/actualizar las cuentas evita que
+        # el administrador reciba 403 al listar vinculaciones.
+        resultado_roles_admin = reparar_roles_admin_demo(db)
+        print(
+            "  [=] Roles ADMIN tenant-scoped verificados para CU29 "
+            f"(roles creados: {resultado_roles_admin.roles_creados or 'ninguno'}, "
+            f"permisos copiados: {resultado_roles_admin.permisos_copiados})"
+        )
 
         # -------------------------------------------------------------
         # 4. Pacientes Clínicos
@@ -653,8 +684,10 @@ def seed_all():
         if not srv1:
             srv1 = ServicioMedico(
                 id_servicio=1,
+                id_clinica=1,
                 nombre="Consulta general",
                 descripcion="Atención médica general y chequeo preventivo.",
+                modalidad="PRESENCIAL",
                 hora_inicio="08:00:00",
                 hora_fin="13:00:00",
                 duracion_minutos=30,
@@ -662,13 +695,18 @@ def seed_all():
                 estado="activo",
             )
             db.add(srv1)
-        
+        else:
+            srv1.id_clinica = srv1.id_clinica or medico_roberto.id_clinica
+            srv1.modalidad = "PRESENCIAL"
+
         srv2 = db.query(ServicioMedico).filter(ServicioMedico.id_servicio == 2).first()
         if not srv2:
             srv2 = ServicioMedico(
                 id_servicio=2,
+                id_clinica=1,
                 nombre="Consulta especializada",
                 descripcion="Atención médica especializada y teleconsulta.",
+                modalidad="TELECONSULTA",
                 hora_inicio="13:00:00",
                 hora_fin="16:00:00",
                 duracion_minutos=45,
@@ -676,13 +714,18 @@ def seed_all():
                 estado="activo",
             )
             db.add(srv2)
+        else:
+            srv2.id_clinica = srv2.id_clinica or medico_roberto.id_clinica
+            srv2.modalidad = "TELECONSULTA"
 
         srv3 = db.query(ServicioMedico).filter(ServicioMedico.id_servicio == 3).first()
         if not srv3:
             srv3 = ServicioMedico(
                 id_servicio=3,
+                id_clinica=1,
                 nombre="Evaluación médica",
                 descripcion="Evaluación médica integral y control preventivo.",
+                modalidad="PRESENCIAL",
                 hora_inicio="16:00:00",
                 hora_fin="18:00:00",
                 duracion_minutos=60,
@@ -690,6 +733,9 @@ def seed_all():
                 estado="activo",
             )
             db.add(srv3)
+        else:
+            srv3.id_clinica = srv3.id_clinica or medico_roberto.id_clinica
+            srv3.modalidad = "PRESENCIAL"
 
         db.flush()
 

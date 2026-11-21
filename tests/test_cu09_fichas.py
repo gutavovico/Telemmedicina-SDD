@@ -1,5 +1,5 @@
 import unittest
-from datetime import date, datetime
+from datetime import date, datetime, time
 from fastapi import Depends
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, inspect as sa_inspect
@@ -114,9 +114,8 @@ class CU09FichasTestCase(unittest.TestCase):
             db.add(especialidad)
             db.flush()
 
-            from datetime import time
             servicio = ServicioMedico(
-                id_servicio=1, nombre="Consulta Externa Cardiología",
+                id_servicio=1, id_clinica=1, nombre="Consulta Externa Cardiología",
                 hora_inicio=time(8, 0), hora_fin=time(14, 0), duracion_minutos=30, costo=150.0, estado="activo"
             )
             db.add(servicio)
@@ -180,6 +179,31 @@ class CU09FichasTestCase(unittest.TestCase):
         self.assertEqual(res2.status_code, 201, res2.text)
         data2 = res2.json()
         self.assertEqual(data2["correlativo"], "FICH-20260910-0002")
+
+    def test_ficha_valida_servicio_nuevo_y_conserva_referencia_historica(self):
+        payload = {"id_paciente": 1, "id_medico": 1, "id_servicio": 1,
+                   "fecha_atencion": "2026-09-10", "hora_inicio": "09:00",
+                   "hora_fin": "09:30", "motivo_consulta": "Control rutinario"}
+        emitida = self.client.post("/fichas", json=payload)
+        self.assertEqual(emitida.status_code, 201, emitida.text)
+        with self.SessionLocal() as db:
+            db.get(ServicioMedico, 1).estado = "inactivo"
+            db.add_all([
+                ServicioMedico(id_servicio=identificador, id_clinica=clinica, nombre="Consulta",
+                               hora_inicio=time(8), hora_fin=time(14),
+                               duracion_minutos=30, costo=150, estado="activo")
+                for identificador, clinica in ((2, 2), (3, None))
+            ])
+            db.commit()
+        nueva = dict(payload, hora_inicio="10:00", hora_fin="10:30")
+        for identificador, codigo in ((1, 409), (2, 404), (3, 404)):
+            with self.subTest(servicio=identificador):
+                response = self.client.post("/fichas", json=dict(nueva, id_servicio=identificador),
+                                            headers={"X-Tenant-ID": "2"})
+                self.assertEqual(response.status_code, codigo, response.text)
+        detalle = self.client.get("/fichas/" + emitida.json()["id_ficha"])
+        self.assertEqual(detalle.status_code, 200, detalle.text)
+        self.assertEqual(detalle.json()["id_servicio"], 1)
 
     def test_concurrencia_colision_turno_409(self):
         payload = {

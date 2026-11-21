@@ -1,3 +1,5 @@
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
@@ -21,6 +23,7 @@ from app.modules.auth.schemas import (
     ForgotPasswordResponse,
     ResetPasswordRequest,
     SessionStatusResponse,
+    ChangeTemporaryPasswordRequest,
 )
 from app.modules.auth.models import Usuario, SesionActiva
 from app.modules.auth.session_service import (
@@ -40,7 +43,13 @@ from app.modules.auth.service import (
     reset_password,
     FORGOT_PASSWORD_GENERIC,
 )
-from app.modules.auth.dependencies import get_current_user
+from app.modules.auth.dependencies import get_current_user, get_current_user_allow_password_change
+from app.core.security import hash_password
+from app.modules.tenants.temporary_credentials import (
+    get_medical_temporary_credential,
+    get_must_change_credential,
+    user_must_change_password,
+)
 
 router = APIRouter(prefix="/auth", tags=["Autenticación"])
 
@@ -81,6 +90,7 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
         "apellidos": user.apellidos,
         # CU01: el token debe incorporar la version de token del usuario.
         "token_version": user.token_version or 0,
+        "must_change_password": user_must_change_password(db, user.id_usuario),
         "rol": user.rol,  # Incluir rol para frontend (sidebar, permisos)
     }
 
@@ -106,8 +116,48 @@ def login(login_data: LoginRequest, db: Session = Depends(get_db)):
     return TokenResponse(
         access_token=access_token,
         refresh_token=refresh_token,
-        token_type="bearer"
+        token_type="bearer",
+        must_change_password=user_must_change_password(db, user.id_usuario),
     )
+
+
+@router.post(
+    "/change-temporary-password",
+    summary="Cambiar contraseña temporal de primer ingreso",
+)
+def change_temporary_password(
+    payload: ChangeTemporaryPasswordRequest,
+    db: Session = Depends(get_db),
+    current_user: Usuario = Depends(get_current_user_allow_password_change),
+):
+    """Reemplaza la credencial temporal y fuerza un nuevo inicio de sesión."""
+    credential = get_must_change_credential(db, current_user.id_usuario)
+    medical_credential = get_medical_temporary_credential(db, current_user.id_usuario)
+    if not credential and not medical_credential:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="La cuenta no tiene una contraseña temporal pendiente",
+        )
+    if payload.nueva_password != payload.confirmar_password:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Las contraseñas no coinciden",
+        )
+
+    ahora = datetime.now(timezone.utc)
+    current_user.password_hash = hash_password(payload.nueva_password)
+    if credential:
+        credential.temporary_password_changed_at = ahora
+        db.add(credential)
+    if medical_credential:
+        medical_credential.cambiada_en = ahora
+        medical_credential.row_version = int(medical_credential.row_version or 1) + 1
+        db.add(medical_credential)
+    current_user.token_version = (current_user.token_version or 0) + 1
+    db.add(current_user)
+    db.commit()
+
+    return {"detail": "Contraseña actualizada. Inicie sesión nuevamente."}
 
 
 @router.post(

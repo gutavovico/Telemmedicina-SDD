@@ -13,6 +13,9 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.modules.auth.dependencies import get_current_tenant_id, get_current_user
 from app.modules.auth.models import Usuario
+from app.modules.appointments.doctor_entity_links.dependencies import (
+    require_active_medical_link,
+)
 from app.modules.medical_records.prescriptions import schemas, service
 from app.modules.medical_records.prescriptions.dependencies import (
     PERMISO_CATALOG_WRITE,
@@ -149,7 +152,7 @@ def emitir_receta(
     response: Response,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: Optional[int] = Depends(get_current_tenant_id),
     idempotency_key: Optional[str] = Header(default=None, alias="Idempotency-Key"),
 ):
@@ -179,7 +182,7 @@ def listar_recetas(
     skip: int = Query(default=0, ge=0),
     limit: int = Query(default=50, ge=1, le=200),
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: Optional[int] = Depends(get_current_tenant_id),
 ):
     items, total = service.listar_recetas(
@@ -218,7 +221,7 @@ def obtener_receta(
     id_receta: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: Optional[int] = Depends(get_current_tenant_id),
 ):
     receta = service.obtener_receta(db, user=current_user, tenant_id=tenant_id,
@@ -235,7 +238,7 @@ def descargar_pdf_receta(
     id_receta: int,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: Optional[int] = Depends(get_current_tenant_id),
 ):
     contenido, folio = service.obtener_pdf_receta(
@@ -259,7 +262,7 @@ def anular_receta(
     payload: schemas.RecetaAnulacionRequest,
     request: Request,
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: Optional[int] = Depends(get_current_tenant_id),
 ):
     receta = service.anular_receta(db, user=current_user, tenant_id=tenant_id,
