@@ -49,3 +49,7 @@ ssl-key.pem
 .venv
 .venv/
 dev-gateway.mjs
+
+# Artefactos de Cypress
+/cypress/videos/
+/cypress/screenshots/
