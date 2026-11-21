@@ -1,32 +1,72 @@
 import 'dart:convert';
+import 'package:flutter/foundation.dart' show debugPrint, kDebugMode, visibleForTesting;
 import 'package:http/http.dart' as http;
 import '../../../../core/config/api_config.dart';
 import '../../../../core/network/api_client.dart';
+import '../../../../core/storage/secure_storage_service.dart';
 import '../models/chat_message_model.dart';
 import '../models/teleconsulta_model.dart';
 
 class TeleconsultaRemoteDataSource {
   final ApiClient _apiClient = ApiClient();
 
-  static String? _resolvedBaseUrl;
+  static http.Client _httpClient = http.Client();
+  static Future<Map<String, String>> Function()? _headersOverrideForTesting;
 
-  static final List<String> _candidateBaseUrls = [
-    ApiConfig.baseUrl,
-    'http://192.168.101.70:8000',
-    'http://192.168.101.70:4200/backend-api',
-    'http://10.0.2.2:8000',
-    'http://localhost:8000',
-    'http://127.0.0.1:8000',
+  static const Duration _signalTimeout = Duration(seconds: 8);
+  static const Duration _chatTimeout = Duration(seconds: 10);
+
+  static const List<Map<String, dynamic>> defaultIceServers = [
+    {
+      'urls': [
+        'stun:stun.l.google.com:19302',
+        'stun:stun1.l.google.com:19302',
+        'stun:stun2.l.google.com:19302',
+      ],
+    },
   ];
 
-  static List<String> get _orderedBaseUrls {
-    if (_resolvedBaseUrl != null) {
-      return [
-        _resolvedBaseUrl!,
-        ..._candidateBaseUrls.where((u) => u != _resolvedBaseUrl),
-      ];
+  @visibleForTesting
+  static void configureForTesting({
+    http.Client? client,
+    Future<Map<String, String>> Function()? headersBuilder,
+  }) {
+    _httpClient = client ?? http.Client();
+    _headersOverrideForTesting = headersBuilder;
+  }
+
+  @visibleForTesting
+  static void resetTestingOverrides() {
+    _httpClient = http.Client();
+    _headersOverrideForTesting = null;
+  }
+
+  static Future<Map<String, String>> _buildRealtimeHeaders() async {
+    if (_headersOverrideForTesting != null) {
+      return _headersOverrideForTesting!();
     }
-    return _candidateBaseUrls;
+    final headers = <String, String>{
+      'Content-Type': 'application/json',
+      'Accept': 'application/json',
+    };
+    try {
+      final storage = SecureStorageService();
+      final token = await storage.getAccessToken();
+      if (token != null && token.isNotEmpty) {
+        headers['Authorization'] = 'Bearer $token';
+      }
+      final tenantId = await storage.getTenantId();
+      if (tenantId != null && tenantId.isNotEmpty) {
+        headers['X-Tenant-ID'] = tenantId;
+      }
+    } catch (_) {}
+    return headers;
+  }
+
+  static void _logError(String operacion, Object error) {
+    if (kDebugMode) {
+      debugPrint('[TeleconsultaRemoteDataSource] Error en $operacion: $error');
+    }
   }
 
   Future<TeleconsultaViewModel> getTeleconsulta(int idCita) async {
@@ -36,7 +76,9 @@ class TeleconsultaRemoteDataSource {
       if (response is Map<String, dynamic>) {
         vm = TeleconsultaViewModel.fromJson(response);
       }
-    } catch (_) {}
+    } catch (e) {
+      _logError('getTeleconsulta', e);
+    }
 
     final realtimeMsgs = await obtenerMensajesRealtime(idCita);
     final convertidos = <ChatMessageModel>[];
@@ -85,7 +127,7 @@ class TeleconsultaRemoteDataSource {
       return vm;
     }
 
-    // Fallback local si el endpoint principal requirió sesión remota pero el canal realtime local respondió
+    // Fallback local si el endpoint principal requirió sesión remota pero el canal realtime respondió
     return TeleconsultaViewModel(
       nombreClinica: 'Clínica Norte',
       usuarioActivo: const {
@@ -137,7 +179,8 @@ class TeleconsultaRemoteDataSource {
     String? adjuntoUrl,
   }) async {
     final now = DateTime.now();
-    final horaCorta = '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
+    final horaCorta =
+        '${now.hour.toString().padLeft(2, '0')}:${now.minute.toString().padLeft(2, '0')}';
     final ext = adjuntoNombre != null && adjuntoNombre.contains('.')
         ? adjuntoNombre.split('.').last.toUpperCase()
         : 'PDF';
@@ -172,7 +215,9 @@ class TeleconsultaRemoteDataSource {
       if (response is Map<String, dynamic>) {
         return ChatMessageModel.fromJson(response);
       }
-    } catch (_) {}
+    } catch (e) {
+      _logError('enviarMensaje(persistencia)', e);
+    }
 
     return ChatMessageModel(
       idMensaje: now.millisecondsSinceEpoch,
@@ -189,48 +234,84 @@ class TeleconsultaRemoteDataSource {
     );
   }
 
+  /// Obtiene la configuración ICE (STUN/TURN) del backend con respaldo STUN público.
+  static Future<List<Map<String, dynamic>>> obtenerIceServers() async {
+    try {
+      final headers = await _buildRealtimeHeaders();
+      final res = await _httpClient
+          .get(
+            Uri.parse(ApiConfig.teleconsultaConfigUrl),
+            headers: headers,
+          )
+          .timeout(_chatTimeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is Map<String, dynamic> && decoded['iceServers'] is List) {
+          final parsed = <Map<String, dynamic>>[];
+          for (final item in decoded['iceServers'] as List) {
+            if (item is Map) {
+              parsed.add(Map<String, dynamic>.from(item));
+            }
+          }
+          if (parsed.isNotEmpty) {
+            return parsed;
+          }
+        }
+      }
+    } catch (e) {
+      _logError('obtenerIceServers', e);
+    }
+    return defaultIceServers.map((e) => Map<String, dynamic>.from(e)).toList();
+  }
+
   static Future<Map<String, dynamic>?> reportarPresencia({
     required int idCita,
     required String rol,
     required bool conectado,
     String? nombre,
   }) async {
-    for (final base in _orderedBaseUrls) {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$base/citas/$idCita/presencia'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'rol': rol,
-                'conectado': conectado,
-                'nombre': ?nombre,
-              }),
-            )
-            .timeout(const Duration(milliseconds: 1500));
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          _resolvedBaseUrl = base;
-          return jsonDecode(utf8.decode(res.bodyBytes)) as Map<String, dynamic>;
+    try {
+      final headers = await _buildRealtimeHeaders();
+      final res = await _httpClient
+          .post(
+            Uri.parse(ApiConfig.teleconsultaPresenciaUrl(idCita)),
+            headers: headers,
+            body: jsonEncode({
+              'rol': rol,
+              'conectado': conectado,
+              'nombre': ?nombre,
+            }),
+          )
+          .timeout(_signalTimeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      _logError('reportarPresencia', e);
     }
     return null;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerMensajesRealtime(int idCita) async {
-    for (final base in _orderedBaseUrls) {
-      try {
-        final res = await http
-            .get(Uri.parse('$base/citas/$idCita/chat/realtime'))
-            .timeout(const Duration(milliseconds: 1500));
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          _resolvedBaseUrl = base;
-          final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-          if (decoded is List) {
-            return decoded.whereType<Map<String, dynamic>>().toList();
-          }
+    try {
+      final headers = await _buildRealtimeHeaders();
+      final res = await _httpClient
+          .get(
+            Uri.parse(ApiConfig.teleconsultaChatRealtimeUrl(idCita)),
+            headers: headers,
+          )
+          .timeout(_chatTimeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is List) {
+          return decoded.whereType<Map<String, dynamic>>().toList();
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      _logError('obtenerMensajesRealtime', e);
     }
     return [];
   }
@@ -257,69 +338,76 @@ class TeleconsultaRemoteDataSource {
       'archivoTipo': archivoTipo ?? 'PDF',
       'archivoUrl': ?archivoUrl,
     };
-    for (final base in _orderedBaseUrls) {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$base/citas/$idCita/chat/realtime'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode(payload),
-            )
-            .timeout(const Duration(milliseconds: 1500));
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          _resolvedBaseUrl = base;
-          return;
-        }
-      } catch (_) {}
+    try {
+      final headers = await _buildRealtimeHeaders();
+      await _httpClient
+          .post(
+            Uri.parse(ApiConfig.teleconsultaChatRealtimeUrl(idCita)),
+            headers: headers,
+            body: jsonEncode(payload),
+          )
+          .timeout(_chatTimeout);
+    } catch (e) {
+      _logError('enviarMensajeRealtime', e);
     }
   }
 
-  static Future<void> enviarSenalWebrtc({
+  static Future<Map<String, dynamic>?> enviarSenalWebrtc({
     required int idCita,
     required String de,
     required String para,
     required String tipo,
     Map<String, dynamic>? data,
+    String? peerId,
+    String? targetPeerId,
   }) async {
-    for (final base in _orderedBaseUrls) {
-      try {
-        final res = await http
-            .post(
-              Uri.parse('$base/citas/$idCita/webrtc/signal'),
-              headers: {'Content-Type': 'application/json'},
-              body: jsonEncode({
-                'de': de,
-                'para': para,
-                'tipo': tipo,
-                'data': data ?? {},
-              }),
-            )
-            .timeout(const Duration(milliseconds: 1500));
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          _resolvedBaseUrl = base;
-          return;
+    try {
+      final headers = await _buildRealtimeHeaders();
+      final body = <String, dynamic>{
+        'de': de,
+        'para': para,
+        'tipo': tipo,
+        'data': data ?? <String, dynamic>{},
+        'peerId': ?peerId,
+        'targetPeerId': ?targetPeerId,
+      };
+      final res = await _httpClient
+          .post(
+            Uri.parse(ApiConfig.teleconsultaWebrtcSignalUrl(idCita)),
+            headers: headers,
+            body: jsonEncode(body),
+          )
+          .timeout(_signalTimeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is Map<String, dynamic>) {
+          return decoded;
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      _logError('enviarSenalWebrtc($tipo)', e);
     }
+    return null;
   }
 
   static Future<List<Map<String, dynamic>>> obtenerSenalesWebrtc({
     required int idCita,
     required String para,
   }) async {
-    for (final base in _orderedBaseUrls) {
-      try {
-        final res = await http
-            .get(Uri.parse('$base/citas/$idCita/webrtc/signal?para=$para'))
-            .timeout(const Duration(milliseconds: 1500));
-        if (res.statusCode >= 200 && res.statusCode < 300) {
-          _resolvedBaseUrl = base;
-          final decoded = jsonDecode(utf8.decode(res.bodyBytes));
-          if (decoded is List) {
-            return decoded.whereType<Map<String, dynamic>>().toList();
-          }
+    try {
+      final headers = await _buildRealtimeHeaders();
+      final uri = Uri.parse(
+        '${ApiConfig.teleconsultaWebrtcSignalUrl(idCita)}?para=$para',
+      );
+      final res = await _httpClient.get(uri, headers: headers).timeout(_signalTimeout);
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        final decoded = jsonDecode(utf8.decode(res.bodyBytes));
+        if (decoded is List) {
+          return decoded.whereType<Map<String, dynamic>>().toList();
         }
-      } catch (_) {}
+      }
+    } catch (e) {
+      _logError('obtenerSenalesWebrtc', e);
     }
     return [];
   }

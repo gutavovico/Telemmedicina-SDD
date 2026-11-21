@@ -26,8 +26,10 @@
 	<string>$(FLUTTER_BUILD_NUMBER)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>Permite usar la cámara durante la videoconsulta médica.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Permite dictar una solicitud de reporte al pulsar el micrófono.</string>
+	<string>Permite usar el micrófono en la videoconsulta médica y el dictado de reportes.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

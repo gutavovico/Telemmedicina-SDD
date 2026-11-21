@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../../teleconsulta/presentation/screens/chat_teleconsulta_screen.dart';
 import '../../../teleconsulta/presentation/screens/sala_espera_screen.dart';
 import '../../data/models/appointment_model.dart';
@@ -71,6 +72,15 @@ class _MisCitasScreenState extends State<MisCitasScreen>
   }
 
   void _abrirSalaDeEspera(AppointmentModel cita) {
+    String? nombrePaciente;
+    try {
+      final user = Provider.of<AuthController>(context, listen: false).currentUser;
+      if (user != null) {
+        final full = '${user.nombres} ${user.apellidos}'.trim();
+        if (full.isNotEmpty) nombrePaciente = full;
+      }
+    } catch (_) {}
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SalaEsperaScreen(
@@ -84,6 +94,7 @@ class _MisCitasScreenState extends State<MisCitasScreen>
           posicionEnFila: 2,
           pacientesAntes: 1,
           tiempoEstimadoMinutos: 8,
+          pacienteNombre: nombrePaciente,
         ),
       ),
     );

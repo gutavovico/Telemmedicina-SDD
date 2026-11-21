@@ -53,10 +53,14 @@ class ApiConfig {
   static String prescriptionDetailUrl(int id) => '$baseUrl/api/v1/recetas/$id';
   static String prescriptionPdfUrl(int id) => '$baseUrl/api/v1/recetas/$id/pdf';
 
-  // Teleconsulta y Chat de Cita Médica (CU15)
+  // Teleconsulta y Chat de Cita Médica (CU14 / CU15)
   static String teleconsultaUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/teleconsulta';
   static String get myTeleconsultaUrl => '$baseUrl/api/v1/citas/me/teleconsulta';
   static String chatMensajesUrl(int idCita) => '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
+  static String get teleconsultaConfigUrl => '$baseUrl/citas/teleconsulta/config';
+  static String teleconsultaPresenciaUrl(int idCita) => '$baseUrl/citas/$idCita/presencia';
+  static String teleconsultaChatRealtimeUrl(int idCita) => '$baseUrl/citas/$idCita/chat/realtime';
+  static String teleconsultaWebrtcSignalUrl(int idCita) => '$baseUrl/citas/$idCita/webrtc/signal';
 
   // CU22/CU27 reportes; el backend resuelve id_clinica desde la sesión.
   static String get reportCatalogUrl => '$baseUrl/analytics/reportes/catalogo';
@@ -71,6 +75,15 @@ class ApiConfig {
   static String avanzarColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/avanzar';
   static String perdidaColaUrl(int idCita) => '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
+
+  // Notificaciones y Recordatorios Multicanal (CU20)
+  static String get notificacionesBandejaUrl => '$baseUrl/api/v1/notificaciones/bandeja';
+  static String get notificacionesResumenUrl => '$baseUrl/api/v1/notificaciones/resumen-no-leidas';
+  static String notificacionLeerUrl(int id) => '$baseUrl/api/v1/notificaciones/bandeja/$id/leer';
+  static String get notificacionesMarcarTodasUrl => '$baseUrl/api/v1/notificaciones/bandeja/marcar-todas-leidas';
+  static String get notificacionesDispositivosUrl => '$baseUrl/api/v1/notificaciones/dispositivos';
+  static String notificacionRevocarDispositivoUrl(String dispositivoId) =>
+      '$baseUrl/api/v1/notificaciones/dispositivos/$dispositivoId';
 
   // Request timeout duration
   static const Duration timeoutDuration = Duration(seconds: 15);

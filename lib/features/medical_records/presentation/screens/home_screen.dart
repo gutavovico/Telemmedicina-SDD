@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_typography.dart';
 import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../communications/presentation/providers/notificacion_provider.dart';
 
 class HomeScreen extends StatelessWidget {
   const HomeScreen({super.key});
@@ -10,6 +11,7 @@ class HomeScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final authController = context.watch<AuthController>();
+    final notificacionProvider = context.watch<NotificacionProvider>();
     final user = authController.currentUser;
     final isPatient = authController.isPatient;
 
@@ -55,9 +57,37 @@ class HomeScreen extends StatelessWidget {
           ],
         ),
         actions: [
+          // CU20: Campana de notificaciones con badge al lado del botón de salir
+          IconButton(
+            key: const Key('home_notifications_bell_btn'),
+            tooltip: 'Notificaciones',
+            onPressed: () {
+              Navigator.of(context).pushNamed('/notificaciones');
+            },
+            icon: Badge(
+              isLabelVisible: notificacionProvider.conteoNoLeidas > 0,
+              label: Text(
+                '${notificacionProvider.conteoNoLeidas}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              backgroundColor: const Color(0xFFD9381E),
+              child: const Icon(
+                Icons.notifications_none_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+          // Botón compacto de cerrar sesión: solo icono de puerta con personita saliendo
           Padding(
-            padding: const EdgeInsets.only(right: 12),
-            child: TextButton.icon(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              key: const Key('home_compact_logout_btn'),
+              tooltip: 'Cerrar sesión',
               onPressed: () async {
                 final confirm = await showDialog<bool>(
                   context: context,
@@ -86,35 +116,34 @@ class HomeScreen extends StatelessWidget {
                 );
 
                 if (confirm == true && context.mounted) {
-                  await context.read<AuthController>().logout();
+                  await context.read<NotificacionProvider>().revocarDispositivoActual();
+                  if (context.mounted) {
+                    await context.read<AuthController>().logout();
+                  }
                   if (context.mounted) {
                     Navigator.of(context).pushReplacementNamed('/login');
                   }
                 }
               },
-              icon: const Icon(Icons.logout_rounded, color: Colors.white),
-              label: const Text(
-                'Cerrar sesión',
-                style: TextStyle(
+              icon: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.exit_to_app_rounded,
                   color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: TextButton.styleFrom(
-                backgroundColor: AppColors.error,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 10,
-                ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  size: 20,
                 ),
               ),
             ),
           ),
         ],
       ),
-      body: SingleChildScrollView(
+      body: Stack(
+        children: [
+          SingleChildScrollView(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -339,6 +368,8 @@ class HomeScreen extends StatelessWidget {
             ),
           ],
         ),
+      ),
+        ],
       ),
     );
   }

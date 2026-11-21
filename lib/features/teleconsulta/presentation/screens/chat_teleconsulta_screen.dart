@@ -67,12 +67,15 @@ class _ChatTeleconsultaScreenState extends State<ChatTeleconsultaScreen> {
   final TextEditingController _textController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  TeleconsultaProvider? _teleconsultaProvider;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
       final provider = Provider.of<TeleconsultaProvider>(context, listen: false);
+      _teleconsultaProvider = provider;
       provider.cargarTeleconsulta(widget.idCita);
       provider.iniciarPolling(widget.idCita);
     });
@@ -83,8 +86,7 @@ class _ChatTeleconsultaScreenState extends State<ChatTeleconsultaScreen> {
     _textController.dispose();
     _scrollController.dispose();
     _focusNode.dispose();
-    final provider = Provider.of<TeleconsultaProvider>(context, listen: false);
-    provider.detenerPolling();
+    _teleconsultaProvider?.detenerPolling();
     super.dispose();
   }
 
