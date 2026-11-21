@@ -10,10 +10,42 @@ from sqlalchemy import (
     Numeric,
     String,
     Text,
+    Time,
     func,
 )
 from sqlalchemy.orm import relationship
 from app.core.database import Base
+
+
+
+class TemaAdministrador(Base):
+    __tablename__ = "temas_administradores"
+    id_usuario = Column(BigInteger, ForeignKey("usuarios.id_usuario", ondelete="CASCADE"), primary_key=True)
+    id_clinica = Column(BigInteger, ForeignKey("clinicas.id_clinica", ondelete="CASCADE"), primary_key=True, index=True)
+    color_principal = Column(String(7), nullable=False)
+    color_secundario = Column(String(7), nullable=False)
+
+
+class Sede(Base):
+    __tablename__ = "sedes"
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    id_clinica = Column(BigInteger, ForeignKey("clinicas.id_clinica"), nullable=False, index=True)
+    nombre = Column(String(150), nullable=False)
+    ubicacion = Column(String(250), nullable=False)
+    activa = Column(Boolean, nullable=False, default=True)
+
+
+class HorarioSede(Base):
+    __tablename__ = "horarios_sede"
+    __table_args__ = (
+        CheckConstraint("dia BETWEEN 1 AND 7 AND apertura < cierre", name="ck_horarios_sede_intervalo"),
+        Index("ix_horarios_sede_dia", "id_sede", "dia"),
+    )
+    id = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True)
+    id_sede = Column(BigInteger, ForeignKey("sedes.id"), nullable=False)
+    dia = Column(Integer, nullable=False)
+    apertura = Column(Time, nullable=False)
+    cierre = Column(Time, nullable=False)
 
 
 class TenantRequest(Base):

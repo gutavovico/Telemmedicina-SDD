@@ -1,5 +1,6 @@
 import os
 import sys
+from contextlib import nullcontext
 from logging.config import fileConfig
 
 from sqlalchemy import engine_from_config, pool, inspect, text
@@ -29,6 +30,7 @@ from app.modules.medical_records.tratamientos.avisos_models import (  # noqa: F4
 )
 from app.modules.backup.models import BackupConfig  # noqa: F401
 from app.modules.tenants.models import (  # noqa: F401
+    Sede, HorarioSede, TemaAdministrador,
     PlanVersion, TenantRequest, TenantRequestTrackingAudit, TenantSubscription, SubscriptionPayment, SubscriptionChange,
 )
 from app.modules.tenants.usage_billing.models import (  # noqa: F401
@@ -45,7 +47,7 @@ from app.modules.medical_records.laboratory_results.models import ResultadoLabor
 config = context.config
 
 # Establecer dinámicamente la URL de la base de datos desde settings
-config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
@@ -71,13 +73,17 @@ def run_migrations_offline() -> None:
 
 def run_migrations_online() -> None:
     """Run migrations in 'online' mode."""
-    connectable = engine_from_config(
-        config.get_section(config.config_ini_section, {}),
-        prefix="sqlalchemy.",
-        poolclass=pool.NullPool,
-    )
+    supplied_connection = config.attributes.get("connection")
+    if supplied_connection is None:
+        connection_context = engine_from_config(
+            config.get_section(config.config_ini_section, {}),
+            prefix="sqlalchemy.",
+            poolclass=pool.NullPool,
+        ).connect()
+    else:
+        connection_context = nullcontext(supplied_connection)
 
-    with connectable.connect() as connection:
+    with connection_context as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata

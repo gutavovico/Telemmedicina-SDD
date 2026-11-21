@@ -89,6 +89,8 @@ class CommercialAgreementUpdate(BaseModel):
 
 
 class TenantContextResponse(BaseModel):
+    marca: Optional[dict[str, Optional[str]]] = None
+    tema: Optional[dict[str, str]] = None
     clinica_id: Optional[int] = None
     clinica_nombre: str = ""
     clinica_estado: Optional[str] = None

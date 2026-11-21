@@ -143,8 +143,7 @@ def _especialidad_nombre(cita: Cita) -> str:
 
 
 def _monto_cita(db: Session, cita: Cita) -> Decimal:
-    """El costo se toma del servicio médico asociado; si no existe o es cero,
-    se usa el monto por defecto (Stripe no permite cobrar 0 en Checkout)."""
+    """Conserva la tarifa cero explícita y el respaldo para citas sin tarifa válida."""
     if cita.id_servicio:
         servicio = (
             db.query(ServicioMedico)
@@ -155,7 +154,7 @@ def _monto_cita(db: Session, cita: Cita) -> Decimal:
             costo = Decimal(str(servicio.costo)).quantize(
                 Decimal("0.01"), rounding=ROUND_HALF_UP
             )
-            if costo > 0:
+            if costo >= 0:
                 return costo
     return Decimal(str(settings.PAYMENT_DEFAULT_AMOUNT)).quantize(
         Decimal("0.01"), rounding=ROUND_HALF_UP
@@ -349,6 +348,8 @@ def crear_checkout(db: Session, usuario: Usuario, id_cita: int, canal: str = "WE
         return _checkout_response(db, pago_pendiente, simulado=not stripe_habilitado())
 
     monto = _monto_cita(db, cita)
+    if monto == 0:
+        raise PagoError(409, "Esta cita no requiere pago")
     pago = Pago(
         id_usuario=usuario.id_usuario,
         id_cita=cita.id_cita,
@@ -661,6 +662,9 @@ def listar_citas_pendientes(db: Session, usuario: Usuario) -> CitaPendienteListR
         pago = por_cita.get(cita.id_cita)
         if pago and pago.estado == "PAGADO":
             continue
+        monto = pago.monto if pago else _monto_cita(db, cita)
+        if pago is None and monto == 0:
+            continue
         items.append(
             CitaPendientePago(
                 id_cita=cita.id_cita,
@@ -671,7 +675,7 @@ def listar_citas_pendientes(db: Session, usuario: Usuario) -> CitaPendienteListR
                 especialidad_nombre=_especialidad_nombre(cita),
                 tipo_consulta=cita.tipo_consulta,
                 estado_cita=cita.estado,
-                monto=_monto_cita(db, cita),
+                monto=monto,
                 moneda="BOB",
                 estado_pago=pago.estado if pago else None,
                 id_pago=pago.id_pago if pago else None,

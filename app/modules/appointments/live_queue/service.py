@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta, timezone
 import unicodedata
 
 from fastapi import HTTPException
-from sqlalchemy import or_
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.appointments.agenda.schemas import BloqueoResponse
@@ -132,29 +132,32 @@ def _citas_fila(db: Session, id_medico: int, fecha: date, tenant_id: int) -> lis
     return en_fila
 
 
-def _duracion_medico(db: Session, id_medico: int) -> int:
+def _duracion_medico(db: Session, id_medico: int, tenant_id: int) -> int:
+    duraciones = db.query(ServicioMedico.duracion_minutos).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+        ServicioMedico.duracion_minutos > 0,
+    )
     vals = [
         r[0]
-        for r in db.query(ServicioMedico.duracion_minutos)
+        for r in duraciones
         .join(HorarioMedico, HorarioMedico.id_servicio == ServicioMedico.id_servicio)
-        .filter(HorarioMedico.id_medico == id_medico, ServicioMedico.duracion_minutos > 0)
+        .filter(HorarioMedico.id_medico == id_medico)
         .all()
     ]
     if not vals:
-        vals = [
-            r[0]
-            for r in db.query(ServicioMedico.duracion_minutos)
-            .filter(ServicioMedico.duracion_minutos > 0)
-            .all()
-        ]
+        vals = [r[0] for r in duraciones.all()]
     if not vals:
         return DURACION_DEFECTO_MIN
     return max(1, round(sum(vals) / len(vals)))
 
 
-def _duracion_cita(db: Session, cita: Cita, dur_medico: int) -> int:
+def _duracion_cita(db: Session, cita: Cita, dur_medico: int, tenant_id: int) -> int:
     if cita.id_servicio:
-        servicio = db.get(ServicioMedico, cita.id_servicio)
+        servicio = db.query(ServicioMedico).filter(
+            ServicioMedico.id_servicio == cita.id_servicio,
+            or_(ServicioMedico.id_clinica == tenant_id, ServicioMedico.id_clinica.is_(None)),
+        ).first()
         if servicio is not None and (servicio.duracion_minutos or 0) > 0:
             return int(servicio.duracion_minutos)
     return dur_medico
@@ -189,14 +192,14 @@ def computar_cola(db: Session, id_medico: int, fecha: date, tenant_id: int, ahor
     ahora = ahora or ahora_cola()
     citas = _citas_fila(db, id_medico, fecha, tenant_id)
     medico = db.get(Medico, id_medico)
-    dur_medico = _duracion_medico(db, id_medico)
+    dur_medico = _duracion_medico(db, id_medico, tenant_id)
     pausa = _pausa_vigente(db, id_medico, fecha, ahora.time(), tenant_id)
     pausa_min = pausa[0] if pausa else 0
 
     entradas, acumulado = [], 0
     for posicion, cita in enumerate(citas, start=1):
         estado = (cita.estado or "PENDIENTE").upper()
-        duracion = _duracion_cita(db, cita, dur_medico)
+        duracion = _duracion_cita(db, cita, dur_medico, tenant_id)
         eta = 0 if estado == "EN_CURSO" else acumulado + pausa_min
         hora = _a_hora(cita.hora_inicio)
         entradas.append({
@@ -410,15 +413,18 @@ def registrar_pausa(db: Session, user: Usuario, tenant_id: int, datos: PausaCrea
     hora_inicio, hora_fin = _a_hora(datos.hora_inicio), _a_hora(datos.hora_fin)
     if hora_inicio is None or hora_fin is None or hora_inicio >= hora_fin:
         raise HTTPException(400, "La franja de pausa es inválida")
+    servicios_activos = db.query(ServicioMedico).filter(
+        ServicioMedico.id_clinica == tenant_id,
+        func.lower(ServicioMedico.estado) == "activo",
+    ).order_by(ServicioMedico.id_servicio).with_for_update(read=True, of=ServicioMedico)
     servicio = (
-        db.query(ServicioMedico)
+        servicios_activos
         .join(HorarioMedico, HorarioMedico.id_servicio == ServicioMedico.id_servicio)
-        .filter(HorarioMedico.id_medico == medico.id_medico)
-        .order_by(ServicioMedico.id_servicio)
+        .filter(HorarioMedico.id_medico == medico.id_medico, func.lower(HorarioMedico.estado) == "activo")
         .first()
     )
     if servicio is None:
-        servicio = db.query(ServicioMedico).order_by(ServicioMedico.id_servicio).first()
+        servicio = servicios_activos.first()
     if servicio is None:
         raise HTTPException(409, "El médico no tiene servicios configurados para registrar la pausa")
     solapa = (
