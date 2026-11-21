@@ -196,6 +196,15 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Roles y Permisos',
       },
       {
+        path: 'medicos/vinculaciones',
+        canActivate: [adminOnlyGuard],
+        loadComponent: () =>
+          import('./features/appointments/doctor-entity-links/admin/doctor-entity-links-admin').then(
+            (m) => m.DoctorEntityLinksAdmin,
+          ),
+        title: 'Hospital San Juan de Dios - Vínculos Médicos',
+      },
+      {
         path: 'medicos',
         canActivate: [adminOnlyGuard],
         loadComponent: () =>
@@ -532,6 +541,15 @@ export const routes: Routes = [
         title: 'Hospital San Juan de Dios - Copias de Seguridad',
       },
     ],
+  },
+  {
+    path: 'mis-vinculaciones-medico',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/appointments/doctor-entity-links/inbox/doctor-entity-links-inbox').then(
+        (m) => m.DoctorEntityLinksInbox,
+      ),
+    title: 'Hospital San Juan de Dios - Mis Vínculos Médicos',
   },
   {
     path: 'clinica-inactiva',

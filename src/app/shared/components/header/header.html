@@ -228,6 +228,14 @@
 @if (authService.isDoctor()) {
                   <button
                     type="button"
+                    (click)="goToMisVinculaciones()"
+                    class="w-full flex items-center gap-3 px-3 py-2 text-xs sm:text-sm font-medium text-on-surface hover:text-primary hover:bg-primary-fixed/30 rounded-xl transition-all duration-150 cursor-pointer text-left"
+                  >
+                    <span class="material-symbols-outlined text-[20px] text-primary">medical_information</span>
+                    <span class="font-semibold text-primary">Mis vínculos</span>
+                  </button>
+                  <button
+                    type="button"
                     (click)="goToMedicoPanel()"
                     class="w-full flex items-center gap-3 px-3 py-2 text-xs sm:text-sm font-medium text-on-surface hover:text-primary hover:bg-primary-fixed/30 rounded-xl transition-all duration-150 cursor-pointer text-left"
                   >

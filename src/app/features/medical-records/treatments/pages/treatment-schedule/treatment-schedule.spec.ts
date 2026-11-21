@@ -286,10 +286,11 @@ describe('TreatmentSchedule (CU17)', () => {
     comp.ngOnInit();
     vi.clearAllMocks();
 
-    comp.onFechaChange('2026-11-20');
+    const nuevaFecha = '2019-01-02';
+    comp.onFechaChange(nuevaFecha);
 
-    expect(comp.fechaSeleccionada()).toBe('2026-11-20');
-    expect(treatmentsServiceMock.getCronograma).toHaveBeenCalledWith(15, '2026-11-20');
+    expect(comp.fechaSeleccionada()).toBe(nuevaFecha);
+    expect(treatmentsServiceMock.getCronograma).toHaveBeenCalledWith(15, nuevaFecha);
   });
 
   it('6. muestra badges de nivel de adherencia según el valor recibido', () => {

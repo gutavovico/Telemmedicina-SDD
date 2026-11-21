@@ -58,6 +58,11 @@ export class TenantService {
   }
 
   setSuperAdminTenant(clinicaId: number | null): Observable<TenantContext | null> {
+    this.setSelectedTenant(clinicaId);
+    return this.loadTenantContext();
+  }
+
+  setSelectedTenant(clinicaId: number | null): void {
     this.selectedTenantId.set(clinicaId);
     if (this.isBrowser) {
       if (clinicaId !== null) {
@@ -66,7 +71,6 @@ export class TenantService {
         localStorage.removeItem(this.SELECTED_TENANT_ID_KEY);
       }
     }
-    return this.loadTenantContext();
   }
 
   saveTenantContext(context: TenantContext): void {
