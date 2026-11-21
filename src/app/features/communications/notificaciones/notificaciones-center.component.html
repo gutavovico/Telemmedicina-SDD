@@ -1,0 +1,189 @@
+@if (!esVistaAdmin()) {
+  <app-header />
+}
+
+<section
+  class="min-h-screen bg-[#f8fafc]"
+  [class.pt-24]="!esVistaAdmin()"
+  [class.pb-12]="!esVistaAdmin()"
+>
+  <div class="max-w-4xl mx-auto px-4 sm:px-6">
+    <!-- Cabecera del Centro de Notificaciones -->
+    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
+      <div>
+        <div class="flex items-center gap-2.5">
+          <h1 class="text-2xl font-bold text-[#0f172a] tracking-tight">Notificaciones</h1>
+          @if (notificacionService.conteoNoLeidas() > 0) {
+            <span class="px-2.5 py-0.5 rounded-full bg-[#d9381e] text-white text-xs font-bold">
+              {{ notificacionService.conteoNoLeidas() }} nuevas
+            </span>
+          }
+        </div>
+        <p class="text-sm text-slate-500 mt-0.5">
+          @if (esMedico()) {
+            Alertas clínicas, agenda médica, sala virtual y resultados de laboratorio.
+          } @else {
+            Recordatorios de citas, salas de teleconsulta, resultados y tratamientos.
+          }
+        </p>
+      </div>
+
+      <div class="flex items-center gap-2 flex-wrap">
+        <button
+          type="button"
+          (click)="marcarTodasLeidas()"
+          [disabled]="notificacionService.conteoNoLeidas() === 0"
+          class="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-semibold bg-white text-slate-700 border border-slate-200 hover:bg-slate-50 disabled:opacity-40 transition-colors cursor-pointer"
+          title="Marcar todas como leídas"
+        >
+          <span class="material-symbols-outlined leading-none" style="font-size: 20px;">done_all</span>
+          <span>Marcar leídas</span>
+        </button>
+      </div>
+    </div>
+
+    @if (mensajeEstado()) {
+      <div class="mb-4 px-4 py-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-medium flex items-center gap-2">
+        <span class="material-symbols-outlined text-[18px]">check_circle</span>
+        <span>{{ mensajeEstado() }}</span>
+      </div>
+    }
+
+    <!-- Pestañas de filtrado -->
+    <div class="flex items-center justify-between border-b border-slate-200 mb-5">
+      <div class="flex items-center gap-6">
+        <button
+          type="button"
+          (click)="seleccionarTab('TODAS')"
+          class="pb-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer"
+          [class.text-[#0f4c81]]="tabActiva() === 'TODAS'"
+          [class.border-[#0f4c81]]="tabActiva() === 'TODAS'"
+          [class.text-slate-500]="tabActiva() !== 'TODAS'"
+          [class.border-transparent]="tabActiva() !== 'TODAS'"
+        >
+          Todas
+        </button>
+
+        <button
+          type="button"
+          (click)="seleccionarTab('CITAS')"
+          class="pb-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer"
+          [class.text-[#0f4c81]]="tabActiva() === 'CITAS'"
+          [class.border-[#0f4c81]]="tabActiva() === 'CITAS'"
+          [class.text-slate-500]="tabActiva() !== 'CITAS'"
+          [class.border-transparent]="tabActiva() !== 'CITAS'"
+        >
+          Citas
+        </button>
+
+        <button
+          type="button"
+          (click)="seleccionarTab('DOCUMENTOS')"
+          class="pb-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer"
+          [class.text-[#0f4c81]]="tabActiva() === 'DOCUMENTOS'"
+          [class.border-[#0f4c81]]="tabActiva() === 'DOCUMENTOS'"
+          [class.text-slate-500]="tabActiva() !== 'DOCUMENTOS'"
+          [class.border-transparent]="tabActiva() !== 'DOCUMENTOS'"
+        >
+          Documentos
+        </button>
+      </div>
+
+      <button
+        type="button"
+        (click)="toggleSoloNoLeidas()"
+        class="mb-2 px-3 py-1 rounded-full text-xs font-medium border transition-colors cursor-pointer"
+        [class.bg-[#eff6ff]]="soloNoLeidas()"
+        [class.border-[#0f4c81]]="soloNoLeidas()"
+        [class.text-[#0f4c81]]="soloNoLeidas()"
+        [class.bg-white]="!soloNoLeidas()"
+        [class.border-slate-200]="!soloNoLeidas()"
+        [class.text-slate-600]="!soloNoLeidas()"
+      >
+        Solo no leídas
+      </button>
+    </div>
+
+    <!-- Estado de carga / vacío / listado agrupado -->
+    @if (notificacionService.cargando()) {
+      <div class="py-12 text-center text-slate-400 text-sm">Cargando notificaciones...</div>
+    } @else if (grupos().length === 0) {
+      <div class="py-14 bg-white rounded-2xl border border-slate-200/80 text-center">
+        <span class="material-symbols-outlined text-4xl text-slate-300 mb-2">notifications_off</span>
+        <p class="text-sm font-semibold text-slate-700">No tienes notificaciones en esta vista</p>
+        <p class="text-xs text-slate-400 mt-1">Cuando haya citas, salas virtuales o resultados disponibles aparecerán aquí.</p>
+      </div>
+    } @else {
+      <div class="space-y-6">
+        @for (grupo of grupos(); track grupo.etiqueta) {
+          <div>
+            <h2 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">
+              {{ grupo.etiqueta }}
+            </h2>
+
+            <div class="space-y-2.5">
+              @for (notif of grupo.items; track notif.id_notificacion) {
+                <article
+                  (click)="abrirNotificacion(notif)"
+                  class="group relative flex items-start gap-3.5 p-4 rounded-2xl border transition-all cursor-pointer"
+                  [class.bg-[#eff6ff]/80]="!notif.fecha_lectura"
+                  [class.border-[#bfdbfe]]="!notif.fecha_lectura"
+                  [class.bg-white]="!!notif.fecha_lectura"
+                  [class.border-slate-200/70]="!!notif.fecha_lectura"
+                  [class.hover:border-[#0f4c81]/40]="true"
+                >
+                  <!-- Icono temático circular -->
+                  <div
+                    class="w-11 h-11 rounded-full shrink-0 flex items-center justify-center shadow-2xs"
+                    [ngClass]="obtenerColorIcono(notif)"
+                  >
+                    <span class="material-symbols-outlined" style="font-size: 22px;">{{ obtenerIcono(notif) }}</span>
+                  </div>
+
+                  <!-- Contenido -->
+                  <div class="flex-1 min-w-0 pr-5">
+                    <div class="flex items-center justify-between gap-2">
+                      <h3 class="text-sm font-bold text-[#0f172a] leading-snug">
+                        {{ notif.titulo }}
+                      </h3>
+                    </div>
+
+                    <p class="text-xs sm:text-sm text-slate-600 mt-0.5 leading-relaxed">
+                      {{ notif.mensaje }}
+                    </p>
+
+                    <div class="flex items-center justify-between flex-wrap gap-2 mt-2.5">
+                      <div class="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium">
+                        <span>{{ formatearTiempo(notif.created_at) }}</span>
+                        <span>·</span>
+                        <span class="material-symbols-outlined text-[13px]">{{ obtenerIconoCanal(notif.canal_badge) }}</span>
+                        <span>{{ notif.canal_badge || 'Push' }}</span>
+                      </div>
+
+                      <span class="inline-flex items-center gap-1 text-xs font-semibold text-[#0f4c81] group-hover:underline">
+                        <span>{{ obtenerEtiquetaAccion(notif) }}</span>
+                        <span class="material-symbols-outlined text-[14px]">arrow_forward</span>
+                      </span>
+                    </div>
+                  </div>
+
+                  <!-- Punto azul indicador de no leída -->
+                  @if (!notif.fecha_lectura) {
+                    <span
+                      class="absolute top-4 right-4 w-2.5 h-2.5 rounded-full bg-[#1d4ed8]"
+                      title="No leída"
+                    ></span>
+                  }
+                </article>
+              }
+            </div>
+          </div>
+        }
+      </div>
+    }
+  </div>
+</section>
+
+@if (!esVistaAdmin()) {
+  <app-footer />
+}

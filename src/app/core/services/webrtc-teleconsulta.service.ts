@@ -63,7 +63,7 @@ export class WebrtcTeleconsultaService {
   private ultimoFrameRecibidoTs = 0;
   private negociando = false;
 
-  private readonly iceServers: RTCConfiguration = {
+  private iceServers: RTCConfiguration = {
     iceServers: [
       { urls: 'stun:stun.l.google.com:19302' },
       { urls: 'stun:stun1.l.google.com:19302' },
@@ -71,9 +71,31 @@ export class WebrtcTeleconsultaService {
     ]
   };
 
+  /** Configura dinámicamente los servidores ICE (STUN/TURN) provistos por el backend (CU14). */
+  configurarIceServers(servidores: RTCIceServer[]): void {
+    if (servidores && servidores.length > 0) {
+      this.iceServers = { iceServers: servidores };
+    }
+  }
+
   constructor() {
     this.inicializarCanalLocal();
     this.registrarDesbloqueoAudioInteractivo();
+    this.cargarConfiguracionServidoresIce();
+  }
+
+  cargarConfiguracionServidoresIce(): void {
+    if (typeof window === 'undefined') return;
+    this.http.get<{ iceServers?: RTCIceServer[] }>(`${environment.apiUrl}/citas/teleconsulta/config`).subscribe({
+      next: (cfg) => {
+        if (cfg?.iceServers && Array.isArray(cfg.iceServers) && cfg.iceServers.length > 0) {
+          this.configurarIceServers(cfg.iceServers);
+        }
+      },
+      error: () => {
+        // Mantiene la configuración STUN por defecto en caso de desconexión o fallo
+      }
+    });
   }
 
   private inicializarCanalLocal(): void {

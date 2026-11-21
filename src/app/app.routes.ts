@@ -409,6 +409,14 @@ export const routes: Routes = [
           ),
         title: 'Hospital San Juan de Dios - Copias de Seguridad',
       },
+      {
+        path: 'notificaciones',
+        loadComponent: () =>
+          import('./features/communications/notificaciones/notificaciones-center.component').then(
+            (m) => m.NotificacionesCenterComponent,
+          ),
+        title: 'Hospital San Juan de Dios - Notificaciones',
+      },
     ],
   },
   {
@@ -818,6 +826,15 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/teleconsulta-paciente/teleconsulta-paciente').then((m) => m.TeleconsultaPacienteComponent),
     title: 'Hospital San Juan de Dios - Teleconsulta y Chat',
+  },
+  {
+    path: 'notificaciones',
+    canActivate: [authGuard],
+    loadComponent: () =>
+      import('./features/communications/notificaciones/notificaciones-center.component').then(
+        (m) => m.NotificacionesCenterComponent,
+      ),
+    title: 'Hospital San Juan de Dios - Notificaciones',
   },
   {
     path: 'citas/:id/teleconsulta',
