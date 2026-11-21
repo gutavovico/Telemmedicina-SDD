@@ -2,4 +2,6 @@
 <main class="min-h-screen pb-8" [class.pt-20]="!isAdminRoute()" [class.pt-0]="isAdminRoute()">
   <router-outlet></router-outlet>
 </main>
-<app-inactivity-warning></app-inactivity-warning>
+@if (!isAdminRoute()) {
+  <app-inactivity-warning></app-inactivity-warning>
+}

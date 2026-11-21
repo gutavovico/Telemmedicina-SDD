@@ -1,4 +1,5 @@
-import { Injector, runInInjectionContext, signal } from '@angular/core';
+import { signal } from '@angular/core';
+import { TestBed } from '@angular/core/testing';
 import { Router } from '@angular/router';
 import { describe, expect, it, vi } from 'vitest';
 import { AuthService } from '../../../core/services/auth.service';
@@ -10,12 +11,14 @@ describe('AdminLayout navegación CU05/CU22', () => {
     const currentUser = signal({ rol: 'ADMIN', estado: 'ACTIVO', id_clinica: 2 });
     const isAuthenticated = signal(true);
     const profileVerified = signal(true);
-    const injector = Injector.create({ providers: [
-      { provide: AuthService, useValue: { currentUser, isAuthenticated, profileVerified } },
-      { provide: TenantService, useValue: {} },
-      { provide: Router, useValue: { navigate: vi.fn() } },
-    ] });
-    const layout = runInInjectionContext(injector, () => new AdminLayout());
+    TestBed.configureTestingModule({
+      providers: [
+        { provide: AuthService, useValue: { currentUser, isAuthenticated, profileVerified } },
+        { provide: TenantService, useValue: { currentTenant: () => null } },
+        { provide: Router, useValue: { navigate: vi.fn() } },
+      ],
+    });
+    const layout = TestBed.runInInjectionContext(() => new AdminLayout());
     expect(layout.canSeeReports()).toBe(true);
     currentUser.set({ rol: 'MÉDICO', estado: 'ACTIVO', id_clinica: 2 });
     expect(layout.canSeeReports()).toBe(false);
@@ -25,6 +28,5 @@ describe('AdminLayout navegación CU05/CU22', () => {
     profileVerified.set(true);
     isAuthenticated.set(false);
     expect(layout.canSeeReports()).toBe(false);
-    injector.destroy();
   });
 });

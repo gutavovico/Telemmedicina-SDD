@@ -35,21 +35,33 @@ export class TenantService {
 
   constructor() {
     if (this.isBrowser && localStorage.getItem('access_token')) {
-      this.loadTenantContext().subscribe();
+      // Los interceptores vuelven a inyectar TenantService y AuthService.
+      queueMicrotask(() => {
+        if (this.contextoVersion === 0 && localStorage.getItem('access_token')) {
+          this.loadTenantContext().subscribe();
+        }
+      });
     }
   }
 
+  private contextoVersion = 0;
+
+  obtenerLogo() {
+    return this.http.get(`${this.apiUrl}/api/v1/tenant/marca/logo`, { responseType: 'blob' });
+  }
+
   loadTenantContext(): Observable<TenantContext | null> {
+    const version = ++this.contextoVersion;
     return this.http.get<TenantContext>(`${this.apiUrl}/api/v1/tenant/context`).pipe(
       tap((context) => {
-        this.saveTenantContext(context);
+        if (version === this.contextoVersion) this.saveTenantContext(context);
       }),
       catchError((error) => {
-        if (error?.status === 403) {
+        if (version === this.contextoVersion && error?.status === 403) {
           // Clinic is inactive
           const current = this.currentTenant();
           if (current) {
-            this.currentTenant.set({ ...current, clinica_estado: 'INACTIVO' });
+            this.currentTenant.set({ ...current, marca: null, tema: null, clinica_estado: 'INACTIVO' });
           }
         }
         return of(null);
@@ -58,6 +70,7 @@ export class TenantService {
   }
 
   setSuperAdminTenant(clinicaId: number | null): Observable<TenantContext | null> {
+    this.currentTenant.update(c => c && { ...c, marca: null, tema: null });
     this.selectedTenantId.set(clinicaId);
     if (this.isBrowser) {
       if (clinicaId !== null) {
@@ -72,11 +85,12 @@ export class TenantService {
   saveTenantContext(context: TenantContext): void {
     this.currentTenant.set(context);
     if (this.isBrowser) {
-      localStorage.setItem(this.TENANT_CONTEXT_KEY, JSON.stringify(context));
+      localStorage.setItem(this.TENANT_CONTEXT_KEY, JSON.stringify({ ...context, marca: null, tema: null }));
     }
   }
 
   clearTenant(): void {
+    ++this.contextoVersion;
     this.currentTenant.set(null);
     this.selectedTenantId.set(null);
     if (this.isBrowser) {
@@ -89,7 +103,7 @@ export class TenantService {
     if (!this.isBrowser) return null;
     try {
       const raw = localStorage.getItem(this.TENANT_CONTEXT_KEY);
-      return raw ? JSON.parse(raw) : null;
+      return raw ? { ...JSON.parse(raw), marca: null, tema: null } : null;
     } catch {
       return null;
     }

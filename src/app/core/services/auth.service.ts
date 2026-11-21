@@ -168,6 +168,7 @@ export class AuthService {
     const payload: LoginRequest = { correo, password };
     return this.http.post<TokenResponse>(`${this.apiUrl}/auth/login`, payload).pipe(
       tap((response) => {
+        this.tenantService.clearTenant();
         this.saveTokens(response.access_token, response.refresh_token, rememberMe);
         this.mustChangePassword.set(!!response.must_change_password);
 
@@ -309,9 +310,7 @@ export class AuthService {
   }
 
   logout(): void {
-    this.inactivity.stop();
-    this.clearTokens();
-    this.router.navigate(['/login']);
+    this.logoutRemoto();
   }
 
   logoutRemoto(): void {
@@ -325,6 +324,12 @@ export class AuthService {
         .subscribe();
     }
 
+    this.clearTokens();
+    this.router.navigate(['/login']);
+  }
+
+  /** Descarta una sesión inválida sin encadenar otra petición de autenticación. */
+  logoutLocal(): void {
     this.clearTokens();
     this.router.navigate(['/login']);
   }
