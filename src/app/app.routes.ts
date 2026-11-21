@@ -1,3 +1,4 @@
+import { clinicAdminGuard } from './core/guards/clinic-admin.guard';
 import { Routes } from '@angular/router';
 import { authGuard } from './core/guards/auth.guard';
 import { panelGuard, adminOnlyGuard, staffGuard } from './core/guards/panel-access.guard';
@@ -108,6 +109,10 @@ export const routes: Routes = [
     loadComponent: () =>
       import('./features/admin/admin-layout/admin-layout').then((m) => m.AdminLayout),
     children: [
+      {
+        path: 'configuracion-entidad', canActivate: [adminOnlyGuard, clinicAdminGuard],
+        loadComponent: () => import('./features/tenants/entity-configuration/entity-configuration').then(m => m.EntityConfiguration),
+      },
       {
         path: '',
         redirectTo: 'dashboard',

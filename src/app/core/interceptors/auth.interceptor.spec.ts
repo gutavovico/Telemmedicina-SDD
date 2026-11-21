@@ -5,6 +5,7 @@ import { provideRouter, Router } from '@angular/router';
 import { PLATFORM_ID } from '@angular/core';
 
 import { authInterceptor } from './auth.interceptor';
+import { TenantService } from '../services/tenant.service';
 
 /**
  * Pruebas del interceptor de autenticacion (CU23).
@@ -30,7 +31,8 @@ describe('authInterceptor (CU23)', () => {
         provideHttpClient(withInterceptors([authInterceptor])),
         provideHttpClientTesting(),
         provideRouter([]),
-        { provide: PLATFORM_ID, useValue: 'browser' }
+        { provide: PLATFORM_ID, useValue: 'browser' },
+        { provide: TenantService, useValue: { clearTenant: () => undefined } },
       ]
     });
 

@@ -1,0 +1,162 @@
+<main class="mx-auto w-full max-w-5xl p-3 sm:p-6">
+  <h1>Configuración de entidad</h1>
+  @if (ocupado()) {
+    <p class="procesando" role="status">Procesando…</p>
+  }
+  <ng-template #resultadoSeccion let-seccion>
+    @if (resultado(); as aviso) {
+      @if (aviso.seccion === seccion) {
+        @if (aviso.tipo === 'error') {
+          <p class="resultado resultado-error" role="alert">{{ aviso.texto }}</p>
+        } @else {
+          <p class="resultado success" role="status">{{ aviso.texto }}</p>
+        }
+      }
+    }
+  </ng-template>
+  <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'carga' }" />
+  @if (datos(); as data) {
+    <fieldset [disabled]="ocupado()">
+      <section>
+        <h2>Apariencia de mi panel</h2>
+        <p>Estos colores solo cambian tu panel de administración en esta entidad.</p>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'tema' }" />
+        <form [formGroup]="colores" (ngSubmit)="guardar('identidad', colores.getRawValue())">
+          <label>Color principal<input type="color" formControlName="principal" /></label
+          ><label>Color secundario<input type="color" formControlName="secundario" /></label
+          ><button class="accion-principal">Guardar colores</button>
+        </form>
+      </section>
+      <section>
+        <h2>Logo institucional</h2>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'identidad' }" />
+        <label
+          >Logo PNG o JPEG · hasta 2 MB<input
+            type="file"
+            accept="image/png,image/jpeg"
+            (change)="seleccionarLogo($event)" /></label
+        ><button class="accion-principal" [disabled]="!archivo" (click)="subir()">Guardar logo</button>
+      </section>
+      <section>
+        <h2>Dirección de acceso</h2>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'direccion' }" />
+        <p>
+          {{
+            data.direccion
+              ? 'Registrada: ' + data.direccion + ' · Activación pendiente'
+              : 'Sin dirección registrada'
+          }}
+        </p>
+        <form (submit)="$event.preventDefault(); guardar('direccion', { valor: direccion.value })">
+          <label>Subdominio o URL HTTPS<input [formControl]="direccion" required /></label
+          ><button class="accion-principal" [disabled]="direccion.invalid">Registrar dirección</button>
+        </form>
+      </section>
+      <section>
+        <h2>Sedes</h2>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'sedes' }" />
+        @for (s of data.sedes; track s.id) {
+          <article>
+            <span>{{ s.nombre }} · {{ s.ubicacion }} · {{ s.activa ? 'Activa' : 'Inactiva' }}</span
+            ><button (click)="editarSede(s)">Editar</button>
+            @if (s.activa) {
+              <button class="accion-destructiva" (click)="guardar('sedes/' + s.id + '/desactivar', {}, 'PATCH')">
+                Desactivar
+              </button>
+            }
+          </article>
+        }
+        <form [formGroup]="sede" (ngSubmit)="guardarSede()">
+          <label>Nombre<input formControlName="nombre" maxlength="150" required /></label
+          ><label>Ubicación<input formControlName="ubicacion" maxlength="250" required /></label
+          ><button class="accion-principal" [disabled]="sede.invalid">
+            {{ sedeId ? 'Guardar sede' : 'Registrar sede' }}
+          </button>
+          @if (sedeId) {
+            <button type="button" (click)="editarSede()">Cancelar edición</button>
+          }
+        </form>
+      </section>
+      <section>
+        <h2>Servicios y tarifas</h2>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'servicios' }" />
+        @for (s of data.servicios; track s.id) {
+          <article>
+            <span>{{ s.nombre }} · {{ s.costo }} BOB · {{ s.estado }}</span
+            ><button (click)="editarServicio(s)">Editar</button>
+            @if (s.estado.toLowerCase() === 'activo') {
+              <button class="accion-destructiva" (click)="guardar('servicios/' + s.id + '/desactivar', {}, 'PATCH')">
+                Desactivar
+              </button>
+            }
+          </article>
+        }
+        <form [formGroup]="servicio" (ngSubmit)="guardarServicio()">
+          <label>Nombre<input formControlName="nombre" required maxlength="100" /></label>
+          <label
+            >Modalidad<select formControlName="modalidad">
+              <option>PRESENCIAL</option>
+              <option>TELECONSULTA</option>
+            </select></label
+          >
+          <label
+            >Duración (min)<input
+              type="number"
+              formControlName="duracion_minutos"
+              min="1"
+              max="1440"
+              required
+          /></label>
+          <label>Inicio<input type="time" formControlName="hora_inicio" required /></label
+          ><label>Fin<input type="time" formControlName="hora_fin" required /></label>
+          <label>Tarifa (BOB)<input formControlName="costo" inputmode="decimal" required /></label
+          ><button class="accion-principal" [disabled]="servicio.invalid">
+            {{ servicioId ? 'Guardar servicio' : 'Registrar servicio' }}
+          </button>
+          @if (servicioId) {
+            <button type="button" (click)="editarServicio()">Cancelar edición</button>
+          }
+        </form>
+        @if (servicio.controls.costo.invalid) {
+          <p role="alert">Ingrese una tarifa de 0 a 99999999.99 con hasta dos decimales.</p>
+        }
+        <p>
+          La tarifa cero no genera un cobro. La confirmación automática de la cita gratuita sigue pendiente.
+        </p>
+      </section>
+      <section>
+        <h2>Horarios generales</h2>
+        <ng-container *ngTemplateOutlet="resultadoSeccion; context: { $implicit: 'horarios' }" />
+        <p class="advertencia">Estos intervalos aún no intervienen en las reservas.</p>
+        <label
+          >Sede<select #sitio (change)="elegirHorario(sitio.value, semana.value)">
+            <option value="0">Seleccione una sede</option>
+            @for (s of data.sedes; track s.id) {
+              <option [value]="s.id">{{ s.nombre }} {{ s.activa ? '' : '(inactiva)' }}</option>
+            }
+          </select></label
+        >
+        <label
+          >Día<select #semana (change)="elegirHorario(sitio.value, semana.value)">
+            @for (d of dias; track d) {
+              <option [value]="$index + 1">{{ d }}</option>
+            }
+          </select></label
+        >
+        @for (i of intervalos.controls; track i) {
+          <div class="row" [formGroup]="i">
+            <label>Apertura<input type="time" formControlName="apertura" /></label
+            ><label>Cierre<input type="time" formControlName="cierre" /></label
+            ><button (click)="intervalos.removeAt($index)">Quitar</button>
+          </div>
+        }
+        @if (horarioSede) {
+          <button (click)="intervalos.push(intervalo())">Añadir intervalo</button
+          ><button class="accion-principal" [disabled]="intervalos.invalid" (click)="guardarHorario()">Guardar día</button>
+        }
+      </section>
+    </fieldset>
+  } @else if (!ocupado()) {
+    <button (click)="cargar(true)">Volver a cargar</button>
+  }
+</main>
