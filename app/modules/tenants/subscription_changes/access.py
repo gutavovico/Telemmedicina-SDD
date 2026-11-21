@@ -41,7 +41,7 @@ def check_authenticated_endpoint(db, user, connection):
         # Reuse existing tenant resolution, including the legacy patient mapping.
         from app.modules.auth.dependencies import get_required_tenant_id, _is_global_super_admin
         try:
-            tenant_id = get_required_tenant_id(connection.headers.get('X-Tenant-ID'), user)
+            tenant_id = get_required_tenant_id(connection.headers.get('X-Tenant-ID'), user, db=db)
         except HTTPException:
             if _is_global_super_admin(user) and not connection.headers.get('X-Tenant-ID'):
                 return  # Preserve existing global administration without inventing a tenant.

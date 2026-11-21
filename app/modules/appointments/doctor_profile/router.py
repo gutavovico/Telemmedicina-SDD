@@ -4,6 +4,9 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db
 from app.modules.auth.dependencies import get_current_user, get_required_tenant_id, require_admin
 from app.modules.auth.models import Usuario
+from app.modules.appointments.doctor_entity_links.dependencies import (
+    require_active_medical_link,
+)
 from app.modules.appointments.doctor_profile import service
 from app.modules.appointments.doctor_profile.schemas import (
     AsignacionEspecialidad,
@@ -17,7 +20,11 @@ from app.modules.appointments.doctor_profile.schemas import (
     MedicoUpdate,
 )
 
-router = APIRouter(prefix="/medicos", tags=["Médicos (CU04)"])
+router = APIRouter(
+    prefix="/medicos",
+    tags=["Médicos (CU04)"],
+    dependencies=[Depends(require_active_medical_link)],
+)
 router_especialidades = APIRouter(prefix="/especialidades", tags=["Especialidades (CU04)"])
 
 
@@ -43,7 +50,7 @@ def crear_medico(
 )
 def obtener_mi_perfil(
     db: Session = Depends(get_db),
-    current_user: Usuario = Depends(get_current_user),
+    current_user: Usuario = Depends(require_active_medical_link),
     tenant_id: int = Depends(get_required_tenant_id),
 ):
     return service.obtener_medico_por_usuario(db, current_user.id_usuario, current_tenant_id=tenant_id)

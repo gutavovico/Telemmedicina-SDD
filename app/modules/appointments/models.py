@@ -42,6 +42,14 @@ class Especialidad(Base):
 
 class Medico(Base):
     __tablename__ = "medicos"
+    __table_args__ = (
+        # CU29: la matrícula profesional es la credencial global del
+        # profesional, no una unicidad por entidad.
+        UniqueConstraint(
+            "matricula_profesional",
+            name="uq_medicos_matricula_profesional",
+        ),
+    )
 
     id_medico = Column(
         BigInteger().with_variant(Integer, "sqlite"),

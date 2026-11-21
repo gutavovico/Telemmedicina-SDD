@@ -256,6 +256,7 @@ def test_integrated_migration_graph_has_one_head():
     from alembic.script import ScriptDirectory
     root=Path(__file__).resolve().parents[1]
     config=Config(str(root/'alembic.ini'));config.set_main_option('script_location',str(root/'alembic'))
+    assert ScriptDirectory.from_config(config).get_heads()==['cu29_vincular_medico_025']
     script=ScriptDirectory.from_config(config)
     assert script.get_heads()==['cu07_lista_espera_026']
     assert script.get_revision('cu07_lista_espera_026').down_revision==(

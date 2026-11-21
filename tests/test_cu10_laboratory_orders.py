@@ -192,6 +192,17 @@ class CU10LaboratoryOrdersTestCase(unittest.TestCase):
                 )
             """)
 
+            # CU35: el guard de acceso clínico consulta la suscripción del
+            # tenant. La suite no siembra suscripciones, por lo que las tablas
+            # deben existir para conservar la política anterior (sin fila).
+            from app.modules.tenants.models import (
+                SubscriptionChange,
+                TenantSubscription,
+            )
+
+            TenantSubscription.__table__.create(bind=conn, checkfirst=True)
+            SubscriptionChange.__table__.create(bind=conn, checkfirst=True)
+
             # Datos base
             conn.exec_driver_sql("INSERT INTO clinicas (id_clinica, nombre) VALUES (1, 'Clínica Test')")
             conn.exec_driver_sql("INSERT INTO roles (id_rol, nombre) VALUES (1, 'ADMIN'), (2, 'MEDICO'), (3, 'RECEPCION'), (4, 'PACIENTE')")

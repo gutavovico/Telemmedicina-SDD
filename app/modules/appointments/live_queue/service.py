@@ -13,6 +13,9 @@ from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.modules.appointments.agenda.schemas import BloqueoResponse
+from app.modules.appointments.doctor_entity_links.context import (
+    resolve_active_medical_link_for_tenant,
+)
 from app.modules.appointments.doctor_profile.service import (
     obtener_medico,
     obtener_medico_por_usuario,
@@ -79,17 +82,34 @@ def _a_hora(valor):
     return None
 
 
-def _exigir_clinica(user: Usuario, tenant_id: int | None) -> None:
-    if user.id_clinica is None or tenant_id != user.id_clinica:
+def _rol_efectivo(db: Session, user: Usuario, tenant_id: int) -> str:
+    contexto = resolve_active_medical_link_for_tenant(db, user, tenant_id)
+    if contexto is not None:
+        roles = {(rol or "").strip().upper() for rol in contexto.roles}
+        if roles & {"MEDICO", "MÉDICO", "MEDICO_ESPECIALISTA"}:
+            return "MEDICO"
+        if "RECEPCION" in roles or "RECEPCIÓN" in roles:
+            return "RECEPCION"
+        return ""
+    return _rol(user)
+
+
+def _exigir_clinica(db: Session, user: Usuario, tenant_id: int | None) -> None:
+    if tenant_id is None:
+        raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
+    contexto = resolve_active_medical_link_for_tenant(db, user, int(tenant_id))
+    if contexto is not None:
+        return
+    if user.id_clinica is None or int(tenant_id) != int(user.id_clinica):
         raise HTTPException(403, "Se requiere una clínica asociada al usuario autenticado")
 
 
 def _medico_staff(db: Session, user: Usuario, tenant_id: int | None, id_medico: int | None = None) -> Medico:
     """MEDICO solo su fila; RECEPCION exige id_medico. Sin ADMIN de clínica (matriz HU CU08)."""
-    rol = _rol(user)
+    rol = _rol_efectivo(db, user, int(tenant_id)) if tenant_id is not None else ""
     if rol not in ("MEDICO", "RECEPCION"):
         raise HTTPException(403, "Operación de fila virtual restringida a médico o recepción (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     if rol == "MEDICO":
         medico = obtener_medico_por_usuario(db, user.id_usuario, current_tenant_id=tenant_id)
         if id_medico is not None and id_medico != medico.id_medico:
@@ -122,8 +142,7 @@ def _citas_fila(db: Session, id_medico: int, fecha: date, tenant_id: int) -> lis
         .filter(
             Cita.id_medico == id_medico,
             Cita.fecha_cita == fecha,
-            Usuario.id_clinica == tenant_id,
-            or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)),
+            Cita.id_clinica == tenant_id,
         )
         .all()
     )
@@ -259,7 +278,7 @@ def ver_cola(db: Session, user: Usuario, tenant_id: int, id_medico: int | None, 
 def mi_turno(db: Session, user: Usuario, tenant_id: int) -> dict:
     if _rol(user) != "PACIENTE" and user.id_rol != 4:
         raise HTTPException(403, "La consulta de turno propio es exclusiva del paciente (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     paciente = (
         db.query(Paciente)
         .join(Usuario, Paciente.id_usuario == Usuario.id_usuario)
@@ -316,8 +335,7 @@ def _cita_en_fila(db: Session, id_cita: int, id_medico: int, tenant_id: int) -> 
         .filter(
             Cita.id_cita == id_cita,
             Cita.id_medico == id_medico,
-            Usuario.id_clinica == tenant_id,
-            or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)),
+            Cita.id_clinica == tenant_id,
         )
         .first()
     )
@@ -364,10 +382,10 @@ def _avanzar_tras_marcar(db: Session, medico: Medico, fecha: date, tenant_id: in
 def _resolver_cita_staff(db: Session, user: Usuario, tenant_id: int, id_cita: int):
     """Resuelve (cita, medico) para avanzar/perdida: MEDICO solo su fila (404 ajeno),
     RECEPCION cualquier cita del tenant (404 si es de otra clínica)."""
-    rol = _rol(user)
+    rol = _rol_efectivo(db, user, tenant_id)
     if rol not in ("MEDICO", "RECEPCION"):
         raise HTTPException(403, "Operación de fila virtual restringida a médico o recepción (CU08)")
-    _exigir_clinica(user, tenant_id)
+    _exigir_clinica(db, user, tenant_id)
     if rol == "MEDICO":
         medico = obtener_medico_por_usuario(db, user.id_usuario, current_tenant_id=tenant_id)
         cita = _cita_en_fila(db, id_cita, medico.id_medico, tenant_id)
@@ -376,8 +394,7 @@ def _resolver_cita_staff(db: Session, user: Usuario, tenant_id: int, id_cita: in
         db.query(Cita)
         .join(Medico, Cita.id_medico == Medico.id_medico)
         .join(Usuario, Medico.id_usuario == Usuario.id_usuario)
-        .filter(Cita.id_cita == id_cita, Usuario.id_clinica == tenant_id,
-                or_(Cita.id_clinica == tenant_id, Cita.id_clinica.is_(None)))
+        .filter(Cita.id_cita == id_cita, Cita.id_clinica == tenant_id)
         .all()
     )
     if not candidatas:

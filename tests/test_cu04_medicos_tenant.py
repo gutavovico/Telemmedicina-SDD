@@ -75,10 +75,16 @@ class CU04MedicosTenantTestCase(unittest.TestCase):
         medico_uno = creada_uno.json()
         self.assertEqual(medico_uno["tenant_id"], "1")
 
-        # La misma matrícula es válida en otra clínica y el perfil ajeno no se expone.
+        # CU29: la matrícula es global; otra clínica no puede reutilizarla.
         self._as_user(3)
         self.assertEqual(self.client.get(f"/medicos/{medico_uno['id_medico']}").status_code, 404)
-        creada_dos = self.client.post("/medicos", json=self._payload(4))
+        duplicada = self.client.post("/medicos", json=self._payload(4))
+        self.assertEqual(duplicada.status_code, 409, duplicada.text)
+
+        # Una matrícula distinta sí crea el perfil en la segunda entidad.
+        payload_dos = self._payload(4)
+        payload_dos["matricula_profesional"] = "BOL-5678"
+        creada_dos = self.client.post("/medicos", json=payload_dos)
         self.assertEqual(creada_dos.status_code, 201, creada_dos.text)
         self.assertEqual(creada_dos.json()["tenant_id"], "2")
 

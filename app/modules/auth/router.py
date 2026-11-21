@@ -46,6 +46,7 @@ from app.modules.auth.service import (
 from app.modules.auth.dependencies import get_current_user, get_current_user_allow_password_change
 from app.core.security import hash_password
 from app.modules.tenants.temporary_credentials import (
+    get_medical_temporary_credential,
     get_must_change_credential,
     user_must_change_password,
 )
@@ -131,7 +132,8 @@ def change_temporary_password(
 ):
     """Reemplaza la credencial temporal y fuerza un nuevo inicio de sesión."""
     credential = get_must_change_credential(db, current_user.id_usuario)
-    if not credential:
+    medical_credential = get_medical_temporary_credential(db, current_user.id_usuario)
+    if not credential and not medical_credential:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="La cuenta no tiene una contraseña temporal pendiente",
@@ -142,8 +144,15 @@ def change_temporary_password(
             detail="Las contraseñas no coinciden",
         )
 
+    ahora = datetime.now(timezone.utc)
     current_user.password_hash = hash_password(payload.nueva_password)
-    credential.temporary_password_changed_at = datetime.now(timezone.utc)
+    if credential:
+        credential.temporary_password_changed_at = ahora
+        db.add(credential)
+    if medical_credential:
+        medical_credential.cambiada_en = ahora
+        medical_credential.row_version = int(medical_credential.row_version or 1) + 1
+        db.add(medical_credential)
     current_user.token_version = (current_user.token_version or 0) + 1
     db.add(current_user)
     db.commit()

@@ -3,9 +3,14 @@
 Reutiliza los helpers de CU12 (robustos ante la divergencia del esquema
 de roles en Neon) y añade fábricas propias del dominio de recetas.
 """
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, Header, HTTPException, status
 from sqlalchemy.orm import Session
 from app.core.database import get_db
+from app.modules.appointments.doctor_entity_links.dependencies import (
+    resolve_active_medical_link,
+)
 from app.modules.auth.dependencies import get_current_user
 from app.modules.auth.models import Usuario
 from app.modules.medical_records.clinical_documents.dependencies import (
@@ -26,8 +31,15 @@ def require_prescription_permission(permiso: str):
     def checker(
         current_user: Usuario = Depends(get_current_user),
         db: Session = Depends(get_db),
+        x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     ) -> Usuario:
-        if not user_has_permission(db, current_user.id_rol, permiso):
+        contexto = resolve_active_medical_link(db, current_user, x_tenant_id)
+        permitido = (
+            permiso in contexto.permisos
+            if contexto is not None
+            else user_has_permission(db, current_user.id_rol, permiso)
+        )
+        if not permitido:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Permiso denegado. Se requiere el permiso '{permiso}'.",
@@ -46,10 +58,15 @@ def require_prescription_roles(allowed_roles):
     def checker(
         current_user: Usuario = Depends(get_current_user),
         db: Session = Depends(get_db),
+        x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
     ) -> Usuario:
-        role_name = (get_role_name(db, current_user.id_rol) or "").upper()
+        contexto = resolve_active_medical_link(db, current_user, x_tenant_id)
+        if contexto is not None:
+            role_names = [rol.upper() for rol in contexto.roles]
+        else:
+            role_names = [(get_role_name(db, current_user.id_rol) or "").upper()]
         allowed_upper = [r.upper() for r in allowed_roles]
-        if role_name not in allowed_upper:
+        if not any(role in allowed_upper for role in role_names):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=(

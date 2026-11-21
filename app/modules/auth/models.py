@@ -1,7 +1,7 @@
-from sqlalchemy import Column, BigInteger, Integer, String, Text, func, DateTime, Boolean, ForeignKey, JSON, CheckConstraint, Numeric, UniqueConstraint
+from sqlalchemy import Column, BigInteger, Index, Integer, String, Text, func, DateTime, Boolean, ForeignKey, JSON, CheckConstraint, Numeric, UniqueConstraint, text
 
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import relationship, Mapped, mapped_column
+from sqlalchemy.orm import deferred, relationship, Mapped, mapped_column
 from app.core.database import Base
 
 
@@ -103,6 +103,17 @@ class RolStr(str):
 
 class Usuario(Base):
     __tablename__ = "usuarios"
+    __table_args__ = (
+        # CU29: el documento de identidad es único globalmente cuando existe.
+        # Se usa un índice único parcial para no bloquear filas legacy en NULL.
+        Index(
+            "uq_usuarios_documento_identidad",
+            "documento_identidad",
+            unique=True,
+            postgresql_where=text("documento_identidad IS NOT NULL"),
+            sqlite_where=text("documento_identidad IS NOT NULL"),
+        ),
+    )
     id_usuario = Column(BigInteger().with_variant(Integer, "sqlite"), primary_key=True, autoincrement=True, index=True)
     # La migración 001 ya permite NULL; d2e3f4a5b6c7 incorpora el rol global.
     id_clinica = Column(BigInteger, ForeignKey("clinicas.id_clinica"), nullable=True)
@@ -110,6 +121,11 @@ class Usuario(Base):
     nombres = Column(String(100), nullable=False)
     apellidos = Column(String(100), nullable=False)
     correo = Column(String(150), unique=True, nullable=False, index=True)
+    # CU29: documento de identidad global, normalizado y nullable para el
+    # onboarding progresivo. Se marca `deferred` para que las consultas legacy
+    # que no lo necesitan sigan funcionando sobre esquemas previos a la
+    # migración 025 durante las pruebas de compatibilidad.
+    documento_identidad = deferred(Column(String(30), nullable=True))
     telefono = Column(String(30), nullable=True)
     password_hash = Column(String(255), nullable=False)
     foto_perfil = Column(String(500), nullable=True)

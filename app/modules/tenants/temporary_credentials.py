@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
+from app.modules.appointments.doctor_entity_links.models import CredencialTemporalMedico
 from app.modules.auth.models import Usuario
 from app.modules.tenants.models import TenantRequest
 
@@ -28,8 +29,31 @@ def get_must_change_credential(
         return None
 
 
+def get_medical_temporary_credential(
+    db: Session, id_usuario: int
+) -> Optional[CredencialTemporalMedico]:
+    """Credencial CU29 de un médico global, sin depender de ``Usuario.id_clinica``."""
+    try:
+        return (
+            db.query(CredencialTemporalMedico)
+            .filter(CredencialTemporalMedico.id_usuario == id_usuario)
+            .order_by(CredencialTemporalMedico.id_credencial.desc())
+            .first()
+        )
+    except OperationalError:
+        db.rollback()
+        return None
+
+
 def user_must_change_password(db: Session, id_usuario: int) -> bool:
-    return get_must_change_credential(db, id_usuario) is not None
+    if get_must_change_credential(db, id_usuario) is not None:
+        return True
+    credencial = get_medical_temporary_credential(db, id_usuario)
+    return bool(
+        credencial is not None
+        and credencial.usada_en is not None
+        and credencial.cambiada_en is None
+    )
 
 
 def credential_is_expired(credential: TenantRequest) -> bool:
