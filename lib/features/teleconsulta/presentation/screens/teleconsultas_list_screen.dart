@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../appointments/presentation/providers/appointment_provider.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import 'chat_teleconsulta_screen.dart';
 import 'sala_espera_screen.dart';
 
@@ -33,6 +34,15 @@ class _TeleconsultasListScreenState extends State<TeleconsultasListScreen> {
     required int pacientesAntes,
     required int tiempoEstimadoMinutos,
   }) {
+    String? nombrePaciente;
+    try {
+      final user = Provider.of<AuthController>(context, listen: false).currentUser;
+      if (user != null) {
+        final full = '${user.nombres} ${user.apellidos}'.trim();
+        if (full.isNotEmpty) nombrePaciente = full;
+      }
+    } catch (_) {}
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => SalaEsperaScreen(
@@ -46,6 +56,7 @@ class _TeleconsultasListScreenState extends State<TeleconsultasListScreen> {
           posicionEnFila: posicionEnFila,
           pacientesAntes: pacientesAntes,
           tiempoEstimadoMinutos: tiempoEstimadoMinutos,
+          pacienteNombre: nombrePaciente,
         ),
       ),
     );

@@ -56,6 +56,12 @@ import 'features/teleconsulta/presentation/providers/teleconsulta_provider.dart'
 import 'features/teleconsulta/presentation/screens/teleconsultas_list_screen.dart';
 import 'features/teleconsulta/presentation/screens/sala_espera_screen.dart';
 import 'features/teleconsulta/presentation/screens/videollamada_movil_screen.dart';
+import 'features/communications/data/models/notificacion_model.dart';
+import 'features/communications/data/services/local_headsup_notification_service.dart';
+import 'features/communications/presentation/providers/notificacion_provider.dart';
+import 'features/communications/presentation/screens/notificaciones_screen.dart';
+import 'features/communications/presentation/services/notificacion_navigation_handler.dart';
+import 'features/communications/presentation/widgets/in_app_notification_banner.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -71,6 +77,25 @@ void main() async {
 
   // CU19: push solo en la APK Android; en web no hace nada.
   await PushService.instance.initialize();
+
+  // Navegación al pulsar una notificación emergente nativa de Android (tipo WhatsApp)
+  LocalHeadsUpNotificationService.instance.onTapNotificacion = (payload) {
+    final nav = prescriptionNavigatorKey.currentState;
+    final ctx = prescriptionNavigatorKey.currentContext;
+    if (nav == null || ctx == null) return;
+    final auth = Provider.of<AuthController>(ctx, listen: false);
+    final ruta = NotificacionNavigationHandler.resolverRuta(
+      tipo: (payload['tipo'] ?? 'SISTEMA').toString(),
+      recursoTipo: payload['recurso_tipo']?.toString(),
+      rolUsuario: auth.userRole,
+      enlaceAccion: payload['enlace_accion']?.toString(),
+    );
+    if (!auth.isAuthenticated) {
+      nav.pushNamedAndRemoveUntil('/login', (_) => false);
+      return;
+    }
+    nav.pushNamed(ruta);
+  };
 
   // Set status bar styling
   SystemChrome.setSystemUIOverlayStyle(
@@ -107,6 +132,14 @@ class TelemedicinaApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => WaitlistProvider()),
         ChangeNotifierProvider(create: (_) => FichaProvider()),
         ChangeNotifierProvider(create: (_) => ClinicalDocumentsProvider()),
+        ChangeNotifierProxyProvider<AuthController, NotificacionProvider>(
+          create: (_) => NotificacionProvider(),
+          update: (_, auth, notif) {
+            final provider = notif ?? NotificacionProvider();
+            provider.sincronizarSesion(isAuthenticated: auth.isAuthenticated);
+            return provider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => AsistenciaProvider()),
         // CU19: pagos en línea y comprobantes digitales.
         ChangeNotifierProvider(create: (_) => PaymentProvider()),
@@ -217,6 +250,76 @@ class TelemedicinaApp extends StatelessWidget {
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         navigatorKey: prescriptionNavigatorKey,
+        builder: (context, child) {
+          return Stack(
+            children: [
+              ?child,
+              Consumer2<NotificacionProvider, AuthController>(
+                builder: (ctx, notifProvider, auth, _) {
+                  final banner = notifProvider.bannerActivo;
+                  return Positioned(
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    child: AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 260),
+                      transitionBuilder: (widget, animation) {
+                        final offset = Tween<Offset>(
+                          begin: const Offset(0, -1),
+                          end: Offset.zero,
+                        ).animate(
+                          CurvedAnimation(
+                            parent: animation,
+                            curve: Curves.easeOutCubic,
+                          ),
+                        );
+                        return SlideTransition(
+                          position: offset,
+                          child: FadeTransition(
+                            opacity: animation,
+                            child: widget,
+                          ),
+                        );
+                      },
+                      child: banner == null
+                          ? const SizedBox.shrink()
+                          : InAppNotificationBanner(
+                              key: ValueKey('global_banner_${banner.id}'),
+                              mensaje: banner,
+                              onDismiss: notifProvider.descartarBannerInApp,
+                              onTap: () {
+                                notifProvider.descartarBannerInApp();
+                                final navCtx =
+                                    prescriptionNavigatorKey.currentContext;
+                                if (navCtx == null) return;
+                                NotificacionNavigationHandler
+                                    .navegarDesdeNotificacion(
+                                  navCtx,
+                                  NotificacionModel(
+                                    id: int.tryParse(banner.id) ?? 0,
+                                    idUsuario:
+                                        auth.currentUser?.idUsuario ?? 0,
+                                    tipo: banner.tipo,
+                                    categoria: 'CITAS',
+                                    canal: 'PUSH',
+                                    canalBadge: banner.canalBadge,
+                                    titulo: banner.titulo,
+                                    mensaje: banner.cuerpo,
+                                    recursoTipo: banner.recursoTipo,
+                                    recursoId: banner.recursoId,
+                                    creadaEn: banner.recibidaEn,
+                                    estado: 'ENVIADO',
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  );
+                },
+              ),
+            ],
+          );
+        },
         initialRoute: '/',
         routes: {
           '/': (context) => const SplashScreen(),
@@ -272,6 +375,7 @@ class TelemedicinaApp extends StatelessWidget {
             );
           },
           '/communications': (context) => const TeleconsultasListScreen(),
+          '/notificaciones': (context) => const NotificacionesScreen(),
           '/teleconsultas': (context) => const TeleconsultasListScreen(),
           '/teleconsulta/sala-espera': (context) => const SalaEsperaScreen(),
           '/teleconsulta/videollamada': (context) =>

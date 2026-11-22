@@ -69,13 +69,21 @@ class ApiConfig {
   static String assistanceDetailUrl(int id) => '$baseUrl/api/v1/asistencia-tratamiento/evaluaciones/$id';
   static String get assistanceCatalogUrl => '$baseUrl/api/v1/asistencia-tratamiento/interacciones/catalogo';
 
-  // Teleconsulta y Chat de Cita Médica (CU15)
+  // Teleconsulta y Chat de Cita Médica (CU14 / CU15)
   static String teleconsultaUrl(int idCita) =>
       '$baseUrl/api/v1/citas/$idCita/teleconsulta';
   static String get myTeleconsultaUrl =>
       '$baseUrl/api/v1/citas/me/teleconsulta';
   static String chatMensajesUrl(int idCita) =>
       '$baseUrl/api/v1/citas/$idCita/chat/mensajes';
+  static String get teleconsultaConfigUrl =>
+      '$baseUrl/citas/teleconsulta/config';
+  static String teleconsultaPresenciaUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/presencia';
+  static String teleconsultaChatRealtimeUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/chat/realtime';
+  static String teleconsultaWebrtcSignalUrl(int idCita) =>
+      '$baseUrl/citas/$idCita/webrtc/signal';
 
   // CU22/CU27 reportes; el backend resuelve id_clinica desde la sesión.
   static String get reportCatalogUrl => '$baseUrl/analytics/reportes/catalogo';
@@ -112,6 +120,15 @@ class ApiConfig {
   static String perdidaColaUrl(int idCita) =>
       '$baseUrl/api/v1/cola/$idCita/perdida';
   static String get pausasColaUrl => '$baseUrl/api/v1/cola/pausas';
+
+  // Notificaciones y Recordatorios Multicanal (CU20)
+  static String get notificacionesBandejaUrl => '$baseUrl/api/v1/notificaciones/bandeja';
+  static String get notificacionesResumenUrl => '$baseUrl/api/v1/notificaciones/resumen-no-leidas';
+  static String notificacionLeerUrl(int id) => '$baseUrl/api/v1/notificaciones/bandeja/$id/leer';
+  static String get notificacionesMarcarTodasUrl => '$baseUrl/api/v1/notificaciones/bandeja/marcar-todas-leidas';
+  static String get notificacionesDispositivosUrl => '$baseUrl/api/v1/notificaciones/dispositivos';
+  static String notificacionRevocarDispositivoUrl(String dispositivoId) =>
+      '$baseUrl/api/v1/notificaciones/dispositivos/$dispositivoId';
 
   // Lista de espera y reasignación de turnos (CU07)
   static String get waitlistUrl => '$baseUrl/api/v1/lista-espera';

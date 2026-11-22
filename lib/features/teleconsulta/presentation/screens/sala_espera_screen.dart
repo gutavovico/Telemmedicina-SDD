@@ -1,11 +1,17 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
 import '../../data/datasources/teleconsulta_remote_datasource.dart';
 import 'videollamada_movil_screen.dart';
 
 String _extraerIniciales(String nombre) {
   if (nombre.isEmpty) return 'DR';
-  final limpio = nombre.replaceAll(RegExp(r'^(Dr\(a\)\.?|Dr\.|Dra\.)\s*', caseSensitive: false), '').trim();
+  final limpio = nombre
+      .replaceAll(RegExp(r'^(Dr\(a\)\.?|Dr\.|Dra\.)\s*', caseSensitive: false), '')
+      .trim();
   final partes = limpio.split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
   if (partes.length >= 2) {
     return '${partes[0][0]}${partes[1][0]}'.toUpperCase();
@@ -26,7 +32,7 @@ class SalaEsperaScreen extends StatefulWidget {
   final int posicionEnFila;
   final int pacientesAntes;
   final int tiempoEstimadoMinutos;
-  final String pacienteNombre;
+  final String? pacienteNombre;
 
   const SalaEsperaScreen({
     super.key,
@@ -40,7 +46,7 @@ class SalaEsperaScreen extends StatefulWidget {
     this.posicionEnFila = 2,
     this.pacientesAntes = 1,
     this.tiempoEstimadoMinutos = 8,
-    this.pacienteNombre = 'Ana Gutiérrez',
+    this.pacienteNombre,
   });
 
   @override
@@ -48,19 +54,37 @@ class SalaEsperaScreen extends StatefulWidget {
 }
 
 class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
-  // Verificación de periféricos y presencia del doctor en tiempo real
-  final bool _camaraLista = true;
-  final bool _microfonoListo = true;
-  final bool _conexionBuena = true;
+  // Verificación real de permisos y presencia del doctor en tiempo real
+  bool _camaraLista = false;
+  bool _microfonoListo = false;
+  bool _conexionVerificada = false;
+  bool _conexionBuena = false;
   bool _doctorConectado = false;
+  bool _sincronizandoPresencia = false;
   Timer? _presenciaTimer;
+
+  String _resolverNombrePaciente() {
+    final param = widget.pacienteNombre?.trim();
+    if (param != null && param.isNotEmpty) return param;
+    try {
+      final user = Provider.of<AuthController>(context, listen: false).currentUser;
+      if (user != null) {
+        final full = '${user.nombres} ${user.apellidos}'.trim();
+        if (full.isNotEmpty) return full;
+      }
+    } catch (_) {}
+    return 'Paciente';
+  }
 
   @override
   void initState() {
     super.initState();
-    _sincronizarPresencia();
-    _presenciaTimer = Timer.periodic(const Duration(seconds: 2), (_) {
+    _verificarPermisosEquipo(solicitarSiFalta: false);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _sincronizarPresencia();
+      _presenciaTimer = Timer.periodic(const Duration(seconds: 3), (_) {
+        _sincronizarPresencia();
+      });
     });
   }
 
@@ -70,25 +94,93 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
     super.dispose();
   }
 
-  Future<void> _sincronizarPresencia() async {
-    final res = await TeleconsultaRemoteDataSource.reportarPresencia(
-      idCita: widget.idCita,
-      rol: 'PACIENTE',
-      conectado: true,
-      nombre: widget.pacienteNombre,
-    );
-    if (mounted && res != null) {
-      final docCon = res['doctor_conectado'] == true;
-      if (docCon != _doctorConectado) {
+  Future<void> _verificarPermisosEquipo({required bool solicitarSiFalta}) async {
+    if (kIsWeb) {
+      if (mounted) {
         setState(() {
-          _doctorConectado = docCon;
+          _camaraLista = true;
+          _microfonoListo = true;
         });
       }
+      return;
+    }
+
+    try {
+      var camStatus = await Permission.camera.status;
+      var micStatus = await Permission.microphone.status;
+
+      if (solicitarSiFalta) {
+        if (!camStatus.isGranted) {
+          camStatus = await Permission.camera.request();
+        }
+        if (!micStatus.isGranted) {
+          micStatus = await Permission.microphone.request();
+        }
+        if ((camStatus.isPermanentlyDenied || micStatus.isPermanentlyDenied) &&
+            mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text(
+                'Habilita cámara y micrófono en Ajustes del dispositivo.',
+              ),
+              action: SnackBarAction(
+                label: 'Ajustes',
+                onPressed: openAppSettings,
+              ),
+            ),
+          );
+        }
+      }
+
+      if (mounted) {
+        setState(() {
+          _camaraLista = camStatus.isGranted;
+          _microfonoListo = micStatus.isGranted;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _sincronizarPresencia() async {
+    if (_sincronizandoPresencia || !mounted) return;
+    _sincronizandoPresencia = true;
+    try {
+      final res = await TeleconsultaRemoteDataSource.reportarPresencia(
+        idCita: widget.idCita,
+        rol: 'PACIENTE',
+        conectado: true,
+        nombre: _resolverNombrePaciente(),
+      );
+      if (!mounted) return;
+
+      if (res != null) {
+        final docCon = res['doctor_conectado'] == true;
+        setState(() {
+          _conexionVerificada = true;
+          _conexionBuena = true;
+          _doctorConectado = docCon;
+        });
+      } else {
+        setState(() {
+          _conexionVerificada = true;
+          _conexionBuena = false;
+        });
+      }
+    } finally {
+      _sincronizandoPresencia = false;
     }
   }
 
-  void _entrarAVideollamada() {
-    final espLimpia = widget.especialidad.replaceAll('· Teleconsulta', '').replaceAll('· Control', '').trim();
+  Future<void> _entrarAVideollamada() async {
+    await _verificarPermisosEquipo(solicitarSiFalta: true);
+    if (!mounted) return;
+
+    final nombrePaciente = _resolverNombrePaciente();
+    final espLimpia = widget.especialidad
+        .replaceAll('· Teleconsulta', '')
+        .replaceAll('· Control', '')
+        .trim();
+
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => VideollamadaMovilScreen(
@@ -97,11 +189,11 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
           medicoNombre: widget.medicoNombre,
           especialidad: espLimpia.isNotEmpty ? espLimpia : 'Medicina General',
           clinicaNombre: widget.clinicaNombre,
-          pacienteNombre: widget.pacienteNombre,
+          pacienteNombre: nombrePaciente,
           medicoIniciales: _extraerIniciales(widget.medicoNombre),
-          pacienteInicial: widget.pacienteNombre.isNotEmpty
-              ? widget.pacienteNombre.substring(0, 1).toUpperCase()
-              : 'A',
+          pacienteInicial: nombrePaciente.isNotEmpty
+              ? nombrePaciente.substring(0, 1).toUpperCase()
+              : 'P',
         ),
       ),
     );
@@ -173,7 +265,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Ficha y Badge de estado en tiempo real
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
@@ -219,8 +310,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                     ],
                   ),
                   const SizedBox(height: 10),
-
-                  // Nombre del Doctor Dinámico
                   Text(
                     widget.medicoNombre,
                     style: const TextStyle(
@@ -231,8 +320,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                     ),
                   ),
                   const SizedBox(height: 4),
-
-                  // Especialidad Dinámica
                   Text(
                     widget.especialidad,
                     style: const TextStyle(
@@ -242,8 +329,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-
-                  // Tag de Institución / Clínica Dinámica
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                     decoration: BoxDecoration(
@@ -283,11 +368,8 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                     ),
                   ),
                   const SizedBox(height: 20),
-
-                  // 2 Cajas de Métricas Dinámicas: Posición y Tiempo Estimado
                   Row(
                     children: [
-                      // Caja 1: Tu Posición
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -331,8 +413,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                         ),
                       ),
                       const SizedBox(width: 14),
-
-                      // Caja 2: Tiempo Estimado
                       Expanded(
                         child: Container(
                           padding: const EdgeInsets.all(16),
@@ -378,8 +458,6 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
                     ],
                   ),
                   const SizedBox(height: 24),
-
-                  // Indicador de Progreso en 4 Pasos (Check-in, En fila, Tu turno, En consulta)
                   Column(
                     children: [
                       Row(
@@ -413,7 +491,7 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
             const SizedBox(height: 20),
 
             // ==========================================
-            // 2. TARJETA: REVISA TU EQUIPO
+            // 2. TARJETA: REVISA TU EQUIPO (PERMISOS REALES)
             // ==========================================
             Container(
               width: double.infinity,
@@ -433,43 +511,70 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
-                    'Revisa tu equipo',
-                    style: TextStyle(
-                      color: Color(0xFF1E293B),
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Revisa tu equipo',
+                        style: TextStyle(
+                          color: Color(0xFF1E293B),
+                          fontSize: 16,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      if (!_camaraLista || !_microfonoListo)
+                        TextButton(
+                          onPressed: () =>
+                              _verificarPermisosEquipo(solicitarSiFalta: true),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 10),
+                            minimumSize: Size.zero,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
+                          child: const Text(
+                            'Permitir acceso',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(height: 16),
 
-                  // Cámara frontal
                   _construirFilaVerificacion(
                     icono: Icons.videocam_outlined,
                     titulo: 'Cámara frontal',
                     ok: _camaraLista,
-                    textoActivo: '✓ Lista',
-                    textoInactivo: '✗ Desconectada',
+                    textoActivo: '✓ Permitida',
+                    textoInactivo: 'Solicitar permiso',
+                    onTap: _camaraLista
+                        ? null
+                        : () => _verificarPermisosEquipo(solicitarSiFalta: true),
                   ),
                   const Divider(height: 22, color: Color(0xFFF1F5F9)),
 
-                  // Micrófono
                   _construirFilaVerificacion(
                     icono: Icons.mic_none_outlined,
                     titulo: 'Micrófono',
                     ok: _microfonoListo,
-                    textoActivo: '✓ Listo',
-                    textoInactivo: '✗ Silenciado',
+                    textoActivo: '✓ Permitido',
+                    textoInactivo: 'Solicitar permiso',
+                    onTap: _microfonoListo
+                        ? null
+                        : () => _verificarPermisosEquipo(solicitarSiFalta: true),
                   ),
                   const Divider(height: 22, color: Color(0xFFF1F5F9)),
 
-                  // Conexión
                   _construirFilaVerificacion(
                     icono: Icons.wifi_rounded,
-                    titulo: 'Conexión',
+                    titulo: 'Conexión al servidor',
                     ok: _conexionBuena,
-                    textoActivo: '✓ Buena',
-                    textoInactivo: '✗ Débil',
+                    textoActivo: '✓ Conectado',
+                    textoInactivo:
+                        _conexionVerificada ? 'Reintentar' : 'Verificando...',
+                    onTap: _conexionBuena ? null : _sincronizarPresencia,
                   ),
                 ],
               ),
@@ -587,40 +692,45 @@ class _SalaEsperaScreenState extends State<SalaEsperaScreen> {
     required bool ok,
     required String textoActivo,
     required String textoInactivo,
+    VoidCallback? onTap,
   }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Row(
-          children: [
-            Icon(icono, size: 20, color: const Color(0xFF475569)),
-            const SizedBox(width: 10),
-            Text(
-              titulo,
-              style: const TextStyle(
-                color: Color(0xFF334155),
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(10),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Row(
+            children: [
+              Icon(icono, size: 20, color: const Color(0xFF475569)),
+              const SizedBox(width: 10),
+              Text(
+                titulo,
+                style: const TextStyle(
+                  color: Color(0xFF334155),
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: ok ? const Color(0xFFE6F4EA) : const Color(0xFFFCE8E6),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              ok ? textoActivo : textoInactivo,
+              style: TextStyle(
+                color: ok ? const Color(0xFF137333) : const Color(0xFFC5221F),
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
               ),
             ),
-          ],
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-          decoration: BoxDecoration(
-            color: ok ? const Color(0xFFE6F4EA) : const Color(0xFFFCE8E6),
-            borderRadius: BorderRadius.circular(12),
           ),
-          child: Text(
-            ok ? textoActivo : textoInactivo,
-            style: TextStyle(
-              color: ok ? const Color(0xFF137333) : const Color(0xFFC5221F),
-              fontSize: 12,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }

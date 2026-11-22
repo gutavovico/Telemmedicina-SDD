@@ -1,8 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import '../../data/datasources/teleconsulta_remote_datasource.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:provider/provider.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../data/services/webrtc_movil_service.dart';
 import 'chat_teleconsulta_screen.dart';
 
 class VideollamadaMovilScreen extends StatefulWidget {
@@ -11,9 +13,9 @@ class VideollamadaMovilScreen extends StatefulWidget {
   final String medicoNombre;
   final String especialidad;
   final String clinicaNombre;
-  final String pacienteNombre;
+  final String? pacienteNombre;
   final String medicoIniciales;
-  final String pacienteInicial;
+  final String? pacienteInicial;
 
   const VideollamadaMovilScreen({
     super.key,
@@ -22,9 +24,9 @@ class VideollamadaMovilScreen extends StatefulWidget {
     this.medicoNombre = 'Dra. Lucía Rojas',
     this.especialidad = 'Cardiología',
     this.clinicaNombre = 'Clínica Norte',
-    this.pacienteNombre = 'Ana Gutiérrez',
+    this.pacienteNombre,
     this.medicoIniciales = 'LR',
-    this.pacienteInicial = 'A',
+    this.pacienteInicial,
   });
 
   @override
@@ -32,47 +34,84 @@ class VideollamadaMovilScreen extends StatefulWidget {
 }
 
 class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
-  // Estado de llamada y periféricos sincronizados con el Doctor (Web)
-  bool _microfonoActivo = true;
-  bool _camaraActiva = true;
-  bool _camaraFrontal = true;
-  bool _doctorConectado = false;
-  bool _doctorCamaraActiva = true;
-  bool _doctorMicrofonoActivo = true;
-  bool _doctorCompartiendoPantalla = false;
+  late final WebrtcMovilService _webrtc;
   bool _cerrandoPorDoctor = false;
-  Uint8List? _doctorFrameBytes;
-  int _contadorMensajesNuevos = 2;
-  int _ultimoTotalMensajes = 0;
-  final Set<String> _senalesProcesadas = {};
-
   int _segundosTranscurridos = 0;
   Timer? _temporizadorLlamada;
-  Timer? _temporizadorSincronizacion;
+  late String _nombrePacienteResuelto;
+  late String _inicialPacienteResuelta;
 
   @override
   void initState() {
     super.initState();
+    _webrtc = WebrtcMovilService();
+    _webrtc.addListener(_onWebrtcStateChanged);
+
+    _nombrePacienteResuelto = _resolverNombrePacienteInicial();
+    _inicialPacienteResuelta = _resolverInicialPaciente(_nombrePacienteResuelto);
+
     _iniciarTemporizador();
-    _iniciarSincronizacionTiempoReal();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _nombrePacienteResuelto = _resolverNombrePacienteConContexto();
+      _inicialPacienteResuelta = _resolverInicialPaciente(_nombrePacienteResuelto);
+      _webrtc.iniciarSesion(
+        idCita: widget.idCita,
+        pacienteNombre: _nombrePacienteResuelto,
+      );
+    });
+  }
+
+  String _resolverNombrePacienteInicial() {
+    final param = widget.pacienteNombre?.trim();
+    if (param != null && param.isNotEmpty) return param;
+    return 'Paciente';
+  }
+
+  String _resolverNombrePacienteConContexto() {
+    final param = widget.pacienteNombre?.trim();
+    if (param != null && param.isNotEmpty) return param;
+    try {
+      final user = Provider.of<AuthController>(context, listen: false).currentUser;
+      if (user != null) {
+        final full = '${user.nombres} ${user.apellidos}'.trim();
+        if (full.isNotEmpty) return full;
+      }
+    } catch (_) {}
+    return 'Paciente';
+  }
+
+  String _resolverInicialPaciente(String nombre) {
+    final paramIni = widget.pacienteInicial?.trim();
+    if (paramIni != null && paramIni.isNotEmpty) {
+      return paramIni.substring(0, 1).toUpperCase();
+    }
+    if (nombre.isNotEmpty) return nombre.substring(0, 1).toUpperCase();
+    return 'P';
+  }
+
+  void _onWebrtcStateChanged() {
+    if (!mounted) return;
+    if (_webrtc.consultaFinalizadaPorDoctor && !_cerrandoPorDoctor) {
+      _cerrarPorFinalizacionDelDoctor();
+      return;
+    }
+    setState(() {});
   }
 
   @override
   void dispose() {
     _detenerTemporizador();
-    _temporizadorSincronizacion?.cancel();
-    TeleconsultaRemoteDataSource.reportarPresencia(
-      idCita: widget.idCita,
-      rol: 'PACIENTE',
-      conectado: false,
-      nombre: widget.pacienteNombre,
-    );
+    _webrtc.removeListener(_onWebrtcStateChanged);
+    _webrtc.dispose();
     super.dispose();
   }
 
   void _iniciarTemporizador() {
-    _temporizadorLlamada = Timer.periodic(const Duration(seconds: 1), (timer) {
-      if (mounted) {
+    _temporizadorLlamada = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (mounted &&
+          (_webrtc.doctorConectado ||
+              _webrtc.p2pConectado ||
+              _webrtc.hayVideoRemoto)) {
         setState(() {
           _segundosTranscurridos++;
         });
@@ -85,127 +124,25 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
     _temporizadorLlamada = null;
   }
 
-  void _iniciarSincronizacionTiempoReal() {
-    _sincronizarConDoctor();
-    _temporizadorSincronizacion = Timer.periodic(const Duration(milliseconds: 650), (_) {
-      _sincronizarConDoctor();
-    });
-  }
-
-  void _cerrarPorFinalizacionDelDoctor() {
+  Future<void> _cerrarPorFinalizacionDelDoctor() async {
     if (_cerrandoPorDoctor || !mounted) return;
     _cerrandoPorDoctor = true;
     _detenerTemporizador();
-    _temporizadorSincronizacion?.cancel();
-    TeleconsultaRemoteDataSource.reportarPresencia(
-      idCita: widget.idCita,
-      rol: 'PACIENTE',
-      conectado: false,
-      nombre: widget.pacienteNombre,
-    );
+    await _webrtc.cerrarSesion();
+    if (!mounted) return;
+
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text('El médico ha finalizado la teleconsulta. Redirigiendo a tus documentos...'),
+        content: Text(
+          'El médico ha finalizado la teleconsulta. Redirigiendo a tus recetas...',
+        ),
         duration: Duration(seconds: 3),
         behavior: SnackBarBehavior.floating,
       ),
     );
     Navigator.of(context).pop();
     if (mounted) {
-      Navigator.of(context).pushNamed('/documentos');
-    }
-  }
-
-  Future<void> _sincronizarConDoctor() async {
-    if (_cerrandoPorDoctor) return;
-
-    // 1. Reportar presencia del paciente móvil y verificar estado de la sesión
-    final presencia = await TeleconsultaRemoteDataSource.reportarPresencia(
-      idCita: widget.idCita,
-      rol: 'PACIENTE',
-      conectado: true,
-      nombre: widget.pacienteNombre,
-    );
-
-    if (mounted && presencia != null) {
-      if (presencia['estado'] == 'FINALIZADA') {
-        _cerrarPorFinalizacionDelDoctor();
-        return;
-      }
-      final docOnline = presencia['doctor_conectado'] == true;
-      if (docOnline != _doctorConectado) {
-        setState(() {
-          _doctorConectado = docOnline;
-        });
-      }
-    }
-
-    // 2. Consultar señales de audio, video en vivo, pantalla y cierre del doctor
-    final senales = await TeleconsultaRemoteDataSource.obtenerSenalesWebrtc(
-      idCita: widget.idCita,
-      para: 'PACIENTE',
-    );
-    if (mounted && senales.isNotEmpty) {
-      for (final s in senales) {
-        final sid = (s['id'] ?? '').toString();
-        if (sid.isEmpty || _senalesProcesadas.contains(sid)) continue;
-        _senalesProcesadas.add(sid);
-
-        final tipo = (s['tipo'] ?? '').toString().toUpperCase();
-        final data = s['data'];
-
-        if (tipo == 'FINALIZAR_CONSULTA') {
-          _cerrarPorFinalizacionDelDoctor();
-          return;
-        }
-
-        if (tipo == 'VIDEO_FRAME' && data is Map && data['frame'] is String) {
-          final frameStr = data['frame'] as String;
-          final commaIdx = frameStr.indexOf(',');
-          final b64 = commaIdx >= 0 ? frameStr.substring(commaIdx + 1) : frameStr;
-          try {
-            final bytes = base64Decode(b64);
-            if (bytes.isNotEmpty && mounted) {
-              setState(() {
-                _doctorFrameBytes = bytes;
-                _doctorConectado = true;
-                _doctorCamaraActiva = true;
-              });
-            }
-          } catch (_) {}
-          continue;
-        }
-
-        setState(() {
-          if (tipo == 'OFFER') {
-            _doctorConectado = true;
-          } else if (tipo == 'CAMARA_ESTADO' && data is Map) {
-            _doctorCamaraActiva = data['activa'] == true;
-            if (!_doctorCamaraActiva) {
-              _doctorFrameBytes = null;
-            }
-          } else if (tipo == 'MICROFONO_ESTADO' && data is Map) {
-            _doctorMicrofonoActivo = data['activo'] == true;
-          } else if (tipo == 'PANTALLA_COMPARTIDA') {
-            _doctorCompartiendoPantalla = true;
-            _doctorConectado = true;
-          } else if (tipo == 'DETENER_PANTALLA') {
-            _doctorCompartiendoPantalla = false;
-          }
-        });
-      }
-    }
-
-    // 3. Sincronizar contador de mensajes nuevos enviados por el doctor
-    final mensajes = await TeleconsultaRemoteDataSource.obtenerMensajesRealtime(widget.idCita);
-    if (mounted && mensajes.isNotEmpty) {
-      final totalDoc = mensajes.where((m) => m['esDoctor'] == true).length;
-      if (_ultimoTotalMensajes > 0 && totalDoc > _ultimoTotalMensajes) {
-        setState(() {
-          _contadorMensajesNuevos += (totalDoc - _ultimoTotalMensajes);
-        });
-      }
-      _ultimoTotalMensajes = totalDoc;
+      Navigator.of(context).pushNamed('/recetas');
     }
   }
 
@@ -215,64 +152,64 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
     return '${minutos.toString().padLeft(2, '0')}:${segundos.toString().padLeft(2, '0')}';
   }
 
-  void _alternarMicrofono() {
-    setState(() {
-      _microfonoActivo = !_microfonoActivo;
-    });
-    TeleconsultaRemoteDataSource.enviarSenalWebrtc(
-      idCita: widget.idCita,
-      de: 'PACIENTE',
-      para: 'DOCTOR',
-      tipo: 'MICROFONO_ESTADO',
-      data: {'activo': _microfonoActivo},
-    );
+  Future<void> _alternarMicrofono() async {
+    await _webrtc.alternarMicrofono();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_microfonoActivo ? 'Micrófono activado' : 'Micrófono silenciado'),
-        duration: const Duration(milliseconds: 1200),
+        content: Text(
+          _webrtc.microfonoActivo ? 'Micrófono activado' : 'Micrófono silenciado',
+        ),
+        duration: const Duration(milliseconds: 1100),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  void _alternarCamara() {
-    setState(() {
-      _camaraActiva = !_camaraActiva;
-    });
-    TeleconsultaRemoteDataSource.enviarSenalWebrtc(
-      idCita: widget.idCita,
-      de: 'PACIENTE',
-      para: 'DOCTOR',
-      tipo: 'CAMARA_ESTADO',
-      data: {'activa': _camaraActiva},
-    );
+  Future<void> _alternarCamara() async {
+    await _webrtc.alternarCamara();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_camaraActiva ? 'Cámara activada' : 'Cámara desactivada'),
-        duration: const Duration(milliseconds: 1200),
+        content: Text(
+          _webrtc.camaraActiva ? 'Cámara activada' : 'Cámara desactivada',
+        ),
+        duration: const Duration(milliseconds: 1100),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
-  void _cambiarCamara() {
-    setState(() {
-      _camaraFrontal = !_camaraFrontal;
-    });
+  Future<void> _cambiarCamara() async {
+    final frontal = await _webrtc.cambiarCamara();
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(_camaraFrontal ? 'Cámara frontal seleccionada' : 'Cámara trasera seleccionada'),
-        duration: const Duration(milliseconds: 1200),
+        content: Text(
+          frontal ? 'Cámara frontal seleccionada' : 'Cámara trasera seleccionada',
+        ),
+        duration: const Duration(milliseconds: 1100),
+        behavior: SnackBarBehavior.floating,
+      ),
+    );
+  }
+
+  Future<void> _alternarAltavoz() async {
+    await _webrtc.alternarAltavoz();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          _webrtc.altavozActivo ? 'Altavoz activado' : 'Auricular activado',
+        ),
+        duration: const Duration(milliseconds: 1100),
         behavior: SnackBarBehavior.floating,
       ),
     );
   }
 
   void _abrirChatModal() {
-    setState(() {
-      _contadorMensajesNuevos = 0;
-    });
-
+    _webrtc.reiniciarContadorMensajes();
     ChatTeleconsultaScreen.showAsModal(
       context,
       idCita: widget.idCita,
@@ -293,21 +230,29 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
         ),
         content: const Text(
-          '¿Deseas salir de la sesión médica actual? Podrás consultar tus documentos, exámenes y recetas generadas.',
+          '¿Deseas salir de la sesión médica actual? Podrás consultar tus recetas y documentos clínicos.',
           style: TextStyle(color: Color(0xFFCBD5E1)),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Continuar en llamada', style: TextStyle(color: Colors.white70)),
+            child: const Text(
+              'Continuar en llamada',
+              style: TextStyle(color: Colors.white70),
+            ),
           ),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: const Color(0xFFDC2626),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Salir de la sala', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            child: const Text(
+              'Salir de la sala',
+              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+            ),
           ),
         ],
       ),
@@ -315,143 +260,184 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
 
     if (confirmar == true && mounted) {
       _detenerTemporizador();
-      _temporizadorSincronizacion?.cancel();
-      await TeleconsultaRemoteDataSource.reportarPresencia(
-        idCita: widget.idCita,
-        rol: 'PACIENTE',
-        conectado: false,
-        nombre: widget.pacienteNombre,
-      );
+      await _webrtc.cerrarSesion();
       if (!mounted) return;
       Navigator.of(context).pop();
       if (mounted) {
-        Navigator.of(context).pushNamed('/documentos');
+        Navigator.of(context).pushNamed('/recetas');
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final mostrarVideoEnVivo = _doctorFrameBytes != null && (_doctorCamaraActiva || _doctorCompartiendoPantalla);
+    final bool tieneStreamRemoto = _webrtc.remoteRenderer.srcObject != null &&
+        (_webrtc.doctorCamaraActiva || _webrtc.doctorCompartiendoPantalla);
+    final bool mostrarFallbackEncima = !_webrtc.videoNativoDecodificando &&
+        _webrtc.doctorFrameFallbackBytes != null &&
+        (_webrtc.doctorCamaraActiva || _webrtc.doctorCompartiendoPantalla);
+    final bool mostrarVideoRemoto = tieneStreamRemoto || mostrarFallbackEncima;
 
     return Scaffold(
       backgroundColor: const Color(0xFF0B1528),
       body: SafeArea(
         child: Stack(
           children: [
-            // 1. VISTA PRINCIPAL DEL DOCTOR (VIDEO EN VIVO O AVATAR SI LA CÁMARA ESTÁ APAGADA)
-            if (mostrarVideoEnVivo)
+            // 1. VISTA PRINCIPAL DEL DOCTOR (WEBRTC NATIVO EN VIVO + FALLBACK + AVATAR)
+            if (mostrarVideoRemoto)
               Positioned.fill(
                 child: Container(
                   color: Colors.black,
-                  child: Image.memory(
-                    _doctorFrameBytes!,
-                    fit: BoxFit.contain,
-                    gaplessPlayback: true,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      if (tieneStreamRemoto)
+                        RTCVideoView(
+                          _webrtc.remoteRenderer,
+                          objectFit:
+                              RTCVideoViewObjectFit.RTCVideoViewObjectFitContain,
+                        ),
+                      if (mostrarFallbackEncima)
+                        Image.memory(
+                          _webrtc.doctorFrameFallbackBytes!,
+                          fit: BoxFit.contain,
+                          gaplessPlayback: true,
+                        ),
+                    ],
                   ),
                 ),
               )
             else
               Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Container(
-                      width: 110,
-                      height: 110,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF1E3A5F),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color: _doctorConectado
-                              ? const Color(0xFF10B981).withValues(alpha: 0.7)
-                              : Colors.white.withValues(alpha: 0.15),
-                          width: 3,
-                        ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (_doctorConectado ? const Color(0xFF10B981) : const Color(0xFF1E3A5F))
-                                .withValues(alpha: 0.4),
-                            blurRadius: 24,
-                            spreadRadius: 4,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Container(
+                        width: 110,
+                        height: 110,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1E3A5F),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: _webrtc.doctorConectado
+                                ? const Color(0xFF10B981).withValues(alpha: 0.7)
+                                : Colors.white.withValues(alpha: 0.15),
+                            width: 3,
                           ),
-                        ],
+                          boxShadow: [
+                            BoxShadow(
+                              color: (_webrtc.doctorConectado
+                                      ? const Color(0xFF10B981)
+                                      : const Color(0xFF1E3A5F))
+                                  .withValues(alpha: 0.4),
+                              blurRadius: 24,
+                              spreadRadius: 4,
+                            ),
+                          ],
+                        ),
+                        alignment: Alignment.center,
+                        child: Text(
+                          widget.medicoIniciales,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 38,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
                       ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.medicoIniciales,
+                      const SizedBox(height: 18),
+                      Text(
+                        widget.medicoNombre,
+                        textAlign: TextAlign.center,
                         style: const TextStyle(
                           color: Colors.white,
-                          fontSize: 38,
+                          fontSize: 22,
                           fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2,
+                          letterSpacing: 0.3,
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 18),
-                    Text(
-                      widget.medicoNombre,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 0.3,
+                      const SizedBox(height: 6),
+                      Text(
+                        widget.especialidad,
+                        style: const TextStyle(
+                          color: Color(0xFF94A3B8),
+                          fontSize: 15,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      widget.especialidad,
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 15,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    if (_doctorConectado) ...[
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 12),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withValues(alpha: 0.18),
+                          color: (_webrtc.doctorConectado
+                                  ? const Color(0xFF10B981)
+                                  : const Color(0xFF3B82F6))
+                              .withValues(alpha: 0.18),
                           borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                          border: Border.all(
+                            color: (_webrtc.doctorConectado
+                                    ? const Color(0xFF10B981)
+                                    : const Color(0xFF60A5FA))
+                                .withValues(alpha: 0.45),
+                          ),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(
-                              _doctorCompartiendoPantalla
+                              _webrtc.doctorCompartiendoPantalla
                                   ? Icons.screen_share_rounded
-                                  : (_doctorMicrofonoActivo ? Icons.graphic_eq_rounded : Icons.mic_off_rounded),
-                              color: const Color(0xFF34D399),
+                                  : (_webrtc.doctorConectado
+                                      ? (_webrtc.doctorMicrofonoActivo
+                                          ? Icons.graphic_eq_rounded
+                                          : Icons.mic_off_rounded)
+                                      : Icons.wifi_tethering_rounded),
+                              color: _webrtc.doctorConectado
+                                  ? const Color(0xFF34D399)
+                                  : const Color(0xFF93C5FD),
                               size: 15,
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              _doctorCompartiendoPantalla
-                                  ? 'Médico compartiendo pantalla'
-                                  : (_doctorCamaraActiva
-                                      ? 'En línea · Audio y Video activos'
-                                      : 'En línea · Solo Audio'),
-                              style: const TextStyle(
-                                color: Color(0xFF6EE7B7),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
+                            Flexible(
+                              child: Text(
+                                _webrtc.doctorConectado
+                                    ? (_webrtc.doctorCompartiendoPantalla
+                                        ? 'Médico compartiendo pantalla'
+                                        : (_webrtc.doctorCamaraActiva
+                                            ? _webrtc.estadoConexionTexto
+                                            : 'En línea · Solo Audio'))
+                                    : _webrtc.estadoConexionTexto,
+                                style: TextStyle(
+                                  color: _webrtc.doctorConectado
+                                      ? const Color(0xFF6EE7B7)
+                                      : const Color(0xFFBFDBFE),
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
                             ),
                           ],
                         ),
                       ),
                     ],
-                  ],
+                  ),
                 ),
               ),
 
-            // 2. INDICADORES SUPERIORES (DURACIÓN, HD, CIFRADO)
+            // 2. INDICADORES SUPERIORES (DURACIÓN, ESTADO P2P, CIFRADO)
             Positioned(
               top: 16,
               left: 16,
-              child: Row(
+              right: 118,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 6,
                 children: [
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -466,8 +452,10 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                         Container(
                           width: 8,
                           height: 8,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEF4444),
+                          decoration: BoxDecoration(
+                            color: _webrtc.p2pConectado
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFFEF4444),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -483,7 +471,6 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -491,14 +478,20 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
                     ),
-                    child: const Row(
+                    child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.wifi_rounded, color: Color(0xFF10B981), size: 14),
-                        SizedBox(width: 4),
+                        Icon(
+                          Icons.wifi_rounded,
+                          color: _webrtc.p2pConectado
+                              ? const Color(0xFF10B981)
+                              : const Color(0xFFF59E0B),
+                          size: 14,
+                        ),
+                        const SizedBox(width: 4),
                         Text(
-                          'HD',
-                          style: TextStyle(
+                          _webrtc.p2pConectado ? 'P2P HD' : 'Conectando',
+                          style: const TextStyle(
                             color: Colors.white,
                             fontSize: 12,
                             fontWeight: FontWeight.bold,
@@ -507,7 +500,6 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
@@ -535,17 +527,79 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
               ),
             ),
 
-            // 3. PICTURE IN PICTURE: TÚ (PACIENTE) - ESQUINA SUPERIOR DERECHA
+            // 2.5 BANNER DE AVISO DE PERMISOS SI FALTA CÁMARA O MICRÓFONO
+            if (_webrtc.errorPermisos != null)
+              Positioned(
+                top: 62,
+                left: 16,
+                right: 120,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF7C2D12).withValues(alpha: 0.92),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(
+                      color: const Color(0xFFFB923C).withValues(alpha: 0.5),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(
+                        Icons.warning_amber_rounded,
+                        color: Color(0xFFFDBA74),
+                        size: 18,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _webrtc.errorPermisos!,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      TextButton(
+                        onPressed: () async {
+                          await _webrtc.reintentarPermisosYMedios();
+                          if (_webrtc.errorPermisos != null) {
+                            await openAppSettings();
+                          }
+                        },
+                        style: TextButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: const Text(
+                          'Permitir',
+                          style: TextStyle(
+                            color: Color(0xFFFDE68A),
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+
+            // 3. PICTURE IN PICTURE: CÁMARA LOCAL REAL DEL PACIENTE (TÚ)
             Positioned(
               top: 16,
               right: 16,
               child: Container(
-                width: 90,
-                height: 125,
+                width: 96,
+                height: 134,
                 decoration: BoxDecoration(
                   color: const Color(0xFF24334A),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withValues(alpha: 0.2), width: 1.5),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.25),
+                    width: 1.5,
+                  ),
                   boxShadow: [
                     BoxShadow(
                       color: Colors.black.withValues(alpha: 0.4),
@@ -554,37 +608,70 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                     ),
                   ],
                 ),
-                child: _camaraActiva
-                    ? Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
+                clipBehavior: Clip.antiAlias,
+                child: _webrtc.tieneVideoLocal &&
+                        _webrtc.localRenderer.srcObject != null
+                    ? Stack(
+                        fit: StackFit.expand,
                         children: [
-                          Text(
-                            widget.pacienteInicial,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 26,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          RTCVideoView(
+                            _webrtc.localRenderer,
+                            mirror: _webrtc.camaraFrontal,
+                            objectFit:
+                                RTCVideoViewObjectFit.RTCVideoViewObjectFitCover,
                           ),
-                          const SizedBox(height: 6),
-                          const Text(
-                            'Tú',
-                            style: TextStyle(
-                              color: Color(0xFFCBD5E1),
-                              fontSize: 13,
-                              fontWeight: FontWeight.w500,
+                          Positioned(
+                            bottom: 6,
+                            left: 6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                                vertical: 2,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withValues(alpha: 0.55),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Text(
+                                'Tú',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       )
-                    : const Column(
+                    : Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.videocam_off_rounded, color: Colors.white54, size: 24),
-                          SizedBox(height: 4),
+                          if (!_webrtc.camaraActiva)
+                            const Icon(
+                              Icons.videocam_off_rounded,
+                              color: Colors.white54,
+                              size: 24,
+                            )
+                          else
+                            Text(
+                              _inicialPacienteResuelta,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 26,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          const SizedBox(height: 6),
                           Text(
-                            'Cámara off',
-                            style: TextStyle(color: Colors.white54, fontSize: 10),
+                            _webrtc.camaraActiva ? 'Tú' : 'Cámara off',
+                            style: TextStyle(
+                              color: _webrtc.camaraActiva
+                                  ? const Color(0xFFCBD5E1)
+                                  : Colors.white54,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w500,
+                            ),
                           ),
                         ],
                       ),
@@ -594,25 +681,42 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
             // 4. BARRA DE CONTROLES INFERIOR FLOTANTE
             Positioned(
               bottom: 24,
-              left: 20,
-              right: 20,
+              left: 12,
+              right: 12,
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _construirBotonControl(
-                    icono: _microfonoActivo ? Icons.mic_rounded : Icons.mic_off_rounded,
-                    colorFondo: _microfonoActivo ? const Color(0xFF1E293B) : const Color(0xFFEF4444),
+                    icono: _webrtc.microfonoActivo
+                        ? Icons.mic_rounded
+                        : Icons.mic_off_rounded,
+                    colorFondo: _webrtc.microfonoActivo
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFEF4444),
                     onTap: _alternarMicrofono,
                   ),
                   _construirBotonControl(
-                    icono: _camaraActiva ? Icons.videocam_rounded : Icons.videocam_off_rounded,
-                    colorFondo: _camaraActiva ? const Color(0xFF1E293B) : const Color(0xFFEF4444),
+                    icono: _webrtc.camaraActiva
+                        ? Icons.videocam_rounded
+                        : Icons.videocam_off_rounded,
+                    colorFondo: _webrtc.camaraActiva
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFFEF4444),
                     onTap: _alternarCamara,
                   ),
                   _construirBotonControl(
                     icono: Icons.cameraswitch_outlined,
                     colorFondo: const Color(0xFF1E293B),
                     onTap: _cambiarCamara,
+                  ),
+                  _construirBotonControl(
+                    icono: _webrtc.altavozActivo
+                        ? Icons.volume_up_rounded
+                        : Icons.hearing_rounded,
+                    colorFondo: _webrtc.altavozActivo
+                        ? const Color(0xFF1E293B)
+                        : const Color(0xFF334155),
+                    onTap: _alternarAltavoz,
                   ),
                   Stack(
                     clipBehavior: Clip.none,
@@ -622,10 +726,10 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                         colorFondo: const Color(0xFF1E293B),
                         onTap: _abrirChatModal,
                       ),
-                      if (_contadorMensajesNuevos > 0)
+                      if (_webrtc.contadorMensajesNuevos > 0)
                         Positioned(
-                          top: 2,
-                          right: 2,
+                          top: 0,
+                          right: 0,
                           child: Container(
                             padding: const EdgeInsets.all(5),
                             decoration: const BoxDecoration(
@@ -638,7 +742,7 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
                             ),
                             alignment: Alignment.center,
                             child: Text(
-                              '$_contadorMensajesNuevos',
+                              '${_webrtc.contadorMensajesNuevos}',
                               style: const TextStyle(
                                 color: Colors.white,
                                 fontSize: 11,
@@ -674,10 +778,10 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(30),
+        borderRadius: BorderRadius.circular(28),
         child: Container(
-          width: 54,
-          height: 54,
+          width: 48,
+          height: 48,
           decoration: BoxDecoration(
             color: colorFondo,
             shape: BoxShape.circle,
@@ -697,7 +801,7 @@ class _VideollamadaMovilScreenState extends State<VideollamadaMovilScreen> {
           child: Icon(
             icono,
             color: Colors.white,
-            size: 24,
+            size: 22,
           ),
         ),
       ),
