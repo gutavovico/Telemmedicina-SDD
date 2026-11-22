@@ -101,6 +101,25 @@
 
     <div class="flex items-center gap-3">
       @if (authService.isAuthenticated()) {
+        <!-- CU20: Campana de notificaciones con badge rojo circular junto a la cápsula de usuario -->
+        <a
+          routerLink="/notificaciones"
+          (click)="onNotificacionesClick()"
+          class="relative inline-flex items-center justify-center w-11 h-11 rounded-full text-slate-700 hover:text-primary hover:bg-surface-container transition-colors cursor-pointer"
+          aria-label="Notificaciones"
+          title="Notificaciones"
+        >
+          <span class="material-symbols-outlined leading-none" style="font-size: 28px;">notifications</span>
+          @if (conteoNoLeidas() > 0) {
+            <span
+              class="absolute top-0.5 right-0.5 min-w-[20px] h-[20px] px-1 bg-[#d9381e] text-white text-[11px] font-bold rounded-full flex items-center justify-center leading-none shadow-xs ring-2 ring-white"
+              data-testid="header-notif-badge"
+            >
+              {{ conteoNoLeidas() }}
+            </span>
+          }
+        </a>
+
         <div class="relative group" (mouseenter)="openDropdown()" (mouseleave)="closeDropdown()">
           <button
             type="button"

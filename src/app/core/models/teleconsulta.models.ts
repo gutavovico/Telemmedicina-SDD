@@ -60,4 +60,7 @@ export interface TeleconsultaViewDTO {
   cita: AppointmentDetailsDTO;
   medico: DoctorProfileSummaryDTO;
   mensajes: ChatMessageDTO[];
+  iceServers?: RTCIceServer[];
+  duracionMaximaMinutos?: number;
+  heartbeatTimeoutSegundos?: number;
 }

@@ -164,6 +164,44 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
       },
     }).as('getAuthMe');
 
+    cy.intercept('GET', '**/usuarios/me', {
+      statusCode: 200,
+      body: {
+        id_usuario: 10,
+        id_clinica: 1,
+        nombres: 'Carlos',
+        apellidos: 'Mamani',
+        correo: 'paciente@test.com',
+        rol: 'PACIENTE',
+        estado: 'ACTIVO',
+      },
+    }).as('getUsuariosMe');
+
+    cy.intercept('GET', '**/auth/session', {
+      statusCode: 200,
+      body: {
+        segundos_restantes: 1800,
+        aviso_segundos: 60,
+      },
+    }).as('getAuthSession');
+
+    cy.intercept('GET', '**/api/v1/notificaciones/resumen-no-leidas', {
+      statusCode: 200,
+      body: {
+        no_leidas: 0,
+        total: 0,
+        por_categoria: {},
+      },
+    }).as('getNotifResumen');
+
+    cy.intercept('GET', '**/api/v1/notificaciones/web-push/config', {
+      statusCode: 200,
+      body: {
+        habilitado: false,
+        public_key: null,
+      },
+    }).as('getWebPushConfig');
+
     cy.intercept('GET', '**/medicos/me', {
       statusCode: 404,
       body: { detail: 'No es médico' },
@@ -615,23 +653,33 @@ describe('CU17 - Gestionar y Monitorear Tratamiento Médico: Cronograma y Regist
         },
       }).as('getIdempotencia');
 
+      const patientProfile = JSON.stringify({
+        id_usuario: 10,
+        id_clinica: 1,
+        nombres: 'Carlos',
+        apellidos: 'Mamani',
+        correo: 'paciente@test.com',
+        rol: 'PACIENTE',
+        estado: 'ACTIVO',
+      });
+
+      const seedRecoverySession = (win: Window) => {
+        win.localStorage.setItem('access_token', 'mock-patient-access-token');
+        win.localStorage.setItem('user_profile', patientProfile);
+        win.localStorage.setItem('remember_me', 'true');
+        win.localStorage.setItem('cu17_recovery_10_1_902', JSON.stringify(recoveryMarker));
+        win.sessionStorage.removeItem('pending_dose_10_1_902');
+      };
+
+      // Sembrar la sesión y el marcador antes de cy.visit (tras el cy.clearLocalStorage global)
+      // y reforzarlos en onBeforeLoad para evitar carreras con los módulos ES en Chrome headless.
+      cy.then(() => {
+        seedRecoverySession(window);
+      });
+
       cy.visit('/tratamientos/15/cronograma', {
         onBeforeLoad(win) {
-          // Restaurar la sesión y el marcador antes de que Angular evalúe los guards.
-          // El caso anterior cierra sesión y Cypress puede limpiar el almacenamiento entre casos.
-          win.localStorage.setItem('access_token', 'mock-patient-access-token');
-          win.localStorage.setItem('user_profile', JSON.stringify({
-            id_usuario: 10,
-            id_clinica: 1,
-            nombres: 'Carlos',
-            apellidos: 'Mamani',
-            correo: 'paciente@test.com',
-            rol: 'PACIENTE',
-            estado: 'ACTIVO',
-          }));
-          win.localStorage.setItem('remember_me', 'true');
-          win.localStorage.setItem('cu17_recovery_10_1_902', JSON.stringify(recoveryMarker));
-          win.sessionStorage.removeItem('pending_dose_10_1_902');
+          seedRecoverySession(win);
         },
       });
       cy.url().should('include', '/tratamientos/15/cronograma');

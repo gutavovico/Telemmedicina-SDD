@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TenantService } from '../../../core/services/tenant.service';
+import { NotificacionService } from '../../../core/services/notificacion.service';
+import { WebPushService } from '../../../core/services/web-push.service';
 import { normalizeAppRole } from '../../../core/models/auth.models';
 
 @Component({
@@ -14,7 +16,17 @@ import { normalizeAppRole } from '../../../core/models/auth.models';
 export class Header {
   readonly authService = inject(AuthService);
   readonly tenantService = inject(TenantService);
+  readonly notificacionService = inject(NotificacionService, { optional: true });
+  private readonly webPushService = inject(WebPushService, { optional: true });
   private readonly router = inject(Router);
+
+  conteoNoLeidas(): number {
+    return this.notificacionService?.conteoNoLeidas() ?? 0;
+  }
+
+  onNotificacionesClick(): void {
+    this.webPushService?.suscribirWebPush().subscribe();
+  }
 
   readonly isMobileMenuOpen = signal(false);
   readonly isDropdownOpen = signal(false);

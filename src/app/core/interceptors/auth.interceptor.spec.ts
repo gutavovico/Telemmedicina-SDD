@@ -1,10 +1,10 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpClient, provideHttpClient, withInterceptors } from '@angular/common/http';
+import { HttpClient, HttpContext, provideHttpClient, withInterceptors } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { provideRouter, Router } from '@angular/router';
 import { PLATFORM_ID } from '@angular/core';
 
-import { authInterceptor } from './auth.interceptor';
+import { authInterceptor, SKIP_AUTH_LOGOUT } from './auth.interceptor';
 import { TenantService } from '../services/tenant.service';
 
 /**
@@ -150,6 +150,24 @@ describe('authInterceptor (CU23)', () => {
 
     httpMock.expectNone('http://localhost:8000/auth/refresh');
     // Un login fallido no debe cerrar una sesion previa ni navegar.
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it('no cierra la sesión si la petición en segundo plano marca SKIP_AUTH_LOGOUT', () => {
+    const navigate = vi.spyOn(router, 'navigate');
+    localStorage.removeItem('refresh_token');
+
+    http
+      .get('http://localhost:8000/api/v1/notificaciones/resumen-no-leidas', {
+        context: new HttpContext().set(SKIP_AUTH_LOGOUT, true),
+      })
+      .subscribe({ error: () => undefined });
+
+    httpMock
+      .expectOne('http://localhost:8000/api/v1/notificaciones/resumen-no-leidas')
+      .flush({ detail: 'Credenciales inválidas' }, { status: 401, statusText: 'Unauthorized' });
+
+    expect(localStorage.getItem('access_token')).toBe('access-1');
     expect(navigate).not.toHaveBeenCalled();
   });
 });

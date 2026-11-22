@@ -3,6 +3,8 @@ import { CommonModule } from '@angular/common';
 import { Router, RouterLink, RouterLinkActive, RouterOutlet } from '@angular/router';
 import { AuthService } from '../../../core/services/auth.service';
 import { TenantService } from '../../../core/services/tenant.service';
+import { NotificacionService } from '../../../core/services/notificacion.service';
+import { WebPushService } from '../../../core/services/web-push.service';
 import { normalizeAppRole } from '../../../core/models/auth.models';
 import { TenantSelectorComponent } from '../../../shared/components/tenant-selector/tenant-selector';
 import { InactivityWarning } from '../../auth/inactivity-warning/inactivity-warning';
@@ -17,7 +19,17 @@ import { paletaPanel } from './paleta-panel';
 export class AdminLayout {
   readonly authService = inject(AuthService);
   readonly tenantService = inject(TenantService);
+  readonly notificacionService = inject(NotificacionService, { optional: true });
+  private readonly webPushService = inject(WebPushService, { optional: true });
   private readonly router = inject(Router);
+
+  conteoNoLeidas(): number {
+    return this.notificacionService?.conteoNoLeidas() ?? 0;
+  }
+
+  onNotificacionesClick(): void {
+    this.webPushService?.suscribirWebPush().subscribe();
+  }
 
   readonly logoUrl = signal<string | null>(null);
   readonly temaPanel = computed(() => {
