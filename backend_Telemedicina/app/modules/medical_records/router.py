@@ -1,0 +1,66 @@
+from fastapi import APIRouter
+from app.modules.medical_records.patient_profile.router import router as patient_profile_router
+from app.modules.medical_records.hce.router import router as hce_router
+from app.modules.medical_records.fichas.router import router as fichas_router
+from app.modules.medical_records.clinical_documents.router import (
+    router as clinical_documents_router,
+    pacientes_doc_router as clinical_documents_pacientes_router,
+)
+from app.modules.medical_records.prescriptions.router import (
+    router as prescriptions_router,
+    medicamentos_router,
+)
+from app.modules.medical_records.tratamientos.avisos_router import router as tratamientos_avisos_router
+from app.modules.medical_records.tratamientos.router import router as tratamientos_router
+from app.modules.medical_records.triage.router import router as triage_router
+from app.modules.medical_records.laboratory_orders.router import router as laboratory_orders_router
+from app.modules.medical_records.laboratory_results.router import (
+    router as laboratory_results_router,
+    pacientes_router as laboratory_results_pacientes_router,
+)
+from app.modules.medical_records.laboratory_sync.router import (
+    fuentes_router as laboratory_sources_router,
+    sincronizaciones_router as laboratory_sync_router,
+)
+
+router = APIRouter()
+
+# CU03 - Perfil y expediente de pacientes (GET /api/v1/pacientes/me, ...)
+router.include_router(patient_profile_router)
+
+# CU28 - Historia Clínica Electrónica (GET /api/v1/hce/pacientes/{id})
+router.include_router(hce_router)
+
+# CU09 - Fichas médicas (el frontend llama a /medical-records/fichas y /fichas)
+router.include_router(fichas_router, prefix="/medical-records/fichas")
+# Alias público del contrato CU09 (`/fichas`); no se duplica en OpenAPI.
+router.include_router(fichas_router, prefix="/fichas", include_in_schema=False)
+
+# CU12 - Consultar Documentos Clinicos y Examenes
+router.include_router(clinical_documents_router)
+router.include_router(clinical_documents_pacientes_router)
+
+# CU16: Recetas Médicas Digitales
+router.include_router(prescriptions_router)
+router.include_router(medicamentos_router)
+
+# CU17: Rutas literales de avisos antes de los identificadores de tratamiento
+router.include_router(tratamientos_avisos_router)
+router.include_router(tratamientos_router)
+
+# CU13: Triaje Preliminar AI
+router.include_router(triage_router)
+router.include_router(triage_router, prefix="/api/v1")
+
+# CU10 - Emitir Solicitudes de Examenes de Laboratorio
+router.include_router(laboratory_orders_router)
+
+# CU11 - Cargar, sincronizar e integrar resultados de laboratorio (bloque A: carga manual y consulta)
+router.include_router(laboratory_results_router)
+router.include_router(laboratory_results_pacientes_router)
+router.include_router(fichas_router, prefix="/api/v1/fichas", include_in_schema=False)
+
+
+# CU11 - Bloque B: fuentes de laboratorio y sincronización por lote
+router.include_router(laboratory_sources_router)
+router.include_router(laboratory_sync_router)

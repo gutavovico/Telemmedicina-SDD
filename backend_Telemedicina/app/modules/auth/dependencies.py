@@ -1,0 +1,298 @@
+from typing import List, Optional
+from starlette.requests import HTTPConnection
+
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
+from app.core.database import get_db
+from app.core.security import decode_access_token
+from app.modules.auth.models import Usuario
+from app.modules.auth.service import get_user_by_id
+from app.modules.auth.session_service import enforce_inactivity
+from app.modules.tenants.temporary_credentials import user_must_change_password
+
+security = HTTPBearer(auto_error=False)
+ADMIN_ROLE_ID = 1
+
+
+def _resolve_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials],
+    db: Session,
+) -> Usuario:
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="No autenticado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = credentials.credentials
+    payload = decode_access_token(token)
+
+    user_id_str = payload.get("sub")
+    if not user_id_str:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido: falta identificador de usuario",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    try:
+        user_id = int(user_id_str)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido: identificador no numérico",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    user = get_user_by_id(db, user_id)
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Usuario no encontrado",
+        )
+
+    # CU24: el cierre de sesion incrementa `token_version`, lo que invalida todos
+    # los access tokens emitidos hasta entonces.
+    token_version = payload.get("token_version")
+    if token_version is not None and int(token_version) != int(user.token_version or 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Sesión cerrada o token revocado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    enforce_inactivity(
+        db,
+        payload.get("jti"),
+        user_id,
+        id_clinica=user.id_clinica,
+    )
+
+    if user.estado.lower() != "activo":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La cuenta de usuario está inactiva o suspendida",
+        )
+
+    return user
+
+
+def get_current_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+    connection: HTTPConnection = None,
+) -> Usuario:
+    """Usuario autenticado con acceso completo a la API."""
+    user = _resolve_current_user(credentials, db)
+    if user_must_change_password(db, user.id_usuario):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Debe cambiar su contraseña temporal antes de continuar",
+            headers={"X-Must-Change-Password": "true"},
+        )
+    if connection is not None:
+        from app.modules.tenants.subscription_changes.access import check_authenticated_endpoint
+        check_authenticated_endpoint(db, user, connection)
+    return user
+
+
+def get_current_user_allow_password_change(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db)
+) -> Usuario:
+    """Autenticación limitada al endpoint que reemplaza la contraseña temporal."""
+    return _resolve_current_user(credentials, db)
+
+
+def get_current_tenant_id(
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+    current_user: Optional[Usuario] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> Optional[int]:
+    """Resolves tenant_id from an active CU29 link, the user, or header.
+
+    Para médicos con vínculos CU29, el header solo puede seleccionar una
+    entidad con vínculo ACTIVO propio. Las cuentas legacy sin vínculos
+    conservan el comportamiento anterior.
+    """
+    if current_user is None:
+        return None
+    contexto = _resolver_contexto_medico(db, current_user, x_tenant_id)
+    if contexto is not None:
+        return int(contexto.link.id_clinica)
+    if current_user.id_clinica is not None:
+        return current_user.id_clinica
+    if x_tenant_id:
+        try:
+            return int(x_tenant_id)
+        except ValueError:
+            return None
+    return None
+
+
+def _resolver_contexto_medico(
+    db: Session,
+    current_user: Usuario,
+    x_tenant_id: Optional[str],
+):
+    """Resuelve el vínculo CU29 sin romper cuentas legacy sin vínculos."""
+    from app.modules.appointments.doctor_entity_links.dependencies import (
+        resolve_active_medical_link,
+    )
+
+    try:
+        return resolve_active_medical_link(db, current_user, x_tenant_id)
+    except HTTPException:
+        raise
+    except Exception:
+        # Bases legacy/pruebas sin tablas CU29: se conserva la autorización anterior.
+        db.rollback()
+        return None
+
+
+def get_required_tenant_id(
+    x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+    current_user: Usuario = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> int:
+    """Obtiene el tenant validando que ``X-Tenant-ID`` no amplíe autoridad."""
+    if _is_global_super_admin(current_user):
+        if x_tenant_id:
+            try:
+                return int(x_tenant_id)
+            except ValueError:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Encabezado X-Tenant-ID inválido",
+                )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="El superadministrador requiere X-Tenant-ID para este recurso",
+        )
+
+    if x_tenant_id not in (None, ""):
+        try:
+            header_tenant = int(x_tenant_id)
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Encabezado X-Tenant-ID inválido",
+            )
+        if current_user.id_clinica is not None and int(current_user.id_clinica) == header_tenant:
+            contexto = _resolver_contexto_medico(db, current_user, x_tenant_id)
+            return int(contexto.link.id_clinica) if contexto else header_tenant
+
+        contexto = _resolver_contexto_medico(db, current_user, x_tenant_id)
+        if contexto is not None:
+            return int(contexto.link.id_clinica)
+        if current_user.id_clinica is not None:
+            # Un usuario legacy no cambia de entidad por header.
+            return int(current_user.id_clinica)
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="La cuenta autenticada no está asociada a una clínica",
+        )
+
+    contexto = _resolver_contexto_medico(db, current_user, None)
+    if contexto is not None:
+        return int(contexto.link.id_clinica)
+    if current_user.id_clinica is not None:
+        return int(current_user.id_clinica)
+    if current_user.id_rol == 4:
+        return 1
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="La cuenta autenticada no está asociada a una clínica",
+    )
+
+
+def _is_global_super_admin(current_user: Optional[Usuario]) -> bool:
+    """Superadmin real: sin clínica Y con rol global (rol.id_clinica=None)."""
+    if current_user is None or current_user.id_clinica is not None:
+        return False
+    rol_obj = getattr(current_user, "rol_rel", None)
+    if rol_obj is not None and getattr(rol_obj, "id_clinica", None) is not None:
+        return False
+    if current_user.id_rol == 1:
+        return True
+    try:
+        if isinstance(current_user.rol, str):
+            rol_name = current_user.rol.strip().upper()
+        elif rol_obj and getattr(rol_obj, "nombre", None):
+            rol_name = rol_obj.nombre.strip().upper()
+        else:
+            rol_name = ""
+        if "SUPER" in rol_name:
+            return True
+    except Exception:
+        pass
+    return False
+
+
+def require_admin(current_user: Usuario = Depends(get_current_user)) -> Usuario:
+    """Allow access only to users with the Administracion role (o Super Admin global)."""
+    if _is_global_super_admin(current_user):
+        return current_user
+    if current_user.id_rol != ADMIN_ROLE_ID:
+        if isinstance(current_user.rol, str):
+            rol_name = current_user.rol.strip().upper()
+        elif getattr(current_user, "rol_rel", None) and getattr(current_user.rol_rel, "nombre", None):
+            rol_name = current_user.rol_rel.nombre.strip().upper()
+        else:
+            rol_name = ""
+        if rol_name not in ["ADMIN", "ADMINISTRADOR", "ADMINISTRACION"] and "SUPER" not in rol_name:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="No tienes permisos administrativos.",
+            )
+    return current_user
+
+
+def require_roles(allowed_roles: List[str]):
+    """Allow access to users matching any of the specified roles (o Super Admin global).
+
+    Para médicos con vínculos CU29, el rol efectivo se deriva exclusivamente
+    del vínculo ACTIVO de la entidad seleccionada. Las cuentas legacy sin
+    vínculos conservan el comportamiento anterior durante la transición.
+    """
+    def role_checker(
+        current_user: Usuario = Depends(get_current_user),
+        x_tenant_id: Optional[str] = Header(None, alias="X-Tenant-ID"),
+        db: Session = Depends(get_db),
+    ) -> Usuario:
+        if _is_global_super_admin(current_user):
+            return current_user
+
+        allowed_upper = [r.upper() for r in allowed_roles]
+        contexto = _resolver_contexto_medico(db, current_user, x_tenant_id)
+        if contexto is not None:
+            if any((rol or "").upper() in allowed_upper for rol in contexto.roles):
+                return current_user
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=(
+                    "Permiso denegado. Se requiere uno de los siguientes roles: "
+                    + ", ".join(allowed_roles)
+                ),
+            )
+
+        if isinstance(current_user.rol, str):
+            role_name = current_user.rol.strip().upper()
+        elif getattr(current_user, "rol_rel", None) and getattr(current_user.rol_rel, "nombre", None):
+            role_name = current_user.rol_rel.nombre.strip().upper()
+        else:
+            role_name = ""
+
+        if "ADMIN" in allowed_upper and current_user.id_rol == ADMIN_ROLE_ID:
+            return current_user
+
+        if role_name not in allowed_upper:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Permiso denegado. Se requiere uno de los siguientes roles: {', '.join(allowed_roles)}"
+            )
+        return current_user
+    return role_checker
+

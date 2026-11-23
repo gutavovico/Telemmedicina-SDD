@@ -1,0 +1,238 @@
+from app.modules.tenants.entity_configuration.router import router as entity_configuration_router
+from app.modules.tenants.subscription_changes.router import router as subscription_changes_router
+from app.modules.tenants.subscription_changes import worker as subscription_worker
+from contextlib import asynccontextmanager
+import json
+
+from fastapi import Depends, FastAPI, Request
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.core.database import get_db
+from app.modules.auth.router import router as auth_router
+from app.modules.auth.clinicas.router import router as clinicas_router
+from app.modules.tenants.tenant_management.router import router as tenant_management_router
+from app.modules.tenants.subscription_payments.router import router as subscription_payments_router
+from app.modules.tenants.public_onboarding.router import router as public_onboarding_router
+from app.modules.tenants.deactivation_requests.router import router as deactivation_requests_router
+from app.modules.auth.users_management.router import router as users_management_router
+from app.modules.auth.roles_permissions.router import router as roles_permissions_router
+from app.modules.auth.audit.router import router as audit_router
+from app.modules.medical_records.router import router as medical_records_router
+from app.modules.appointments.router import router as appointments_router
+from app.modules.analytics.router import router as analytics_router
+from app.modules.communications.router import router as communications_router
+from app.modules.communications.notificaciones.router import router as notificaciones_router
+from app.modules.communications.notificaciones import scheduler as notificaciones_scheduler
+from app.modules.payments.router import router as payments_router, pago_error_handler
+from app.modules.payments.service import PagoError
+from app.modules.medical_records.prescriptions.router import prescription_error_handler
+from app.modules.medical_records.prescriptions.service import PrescriptionError
+from app.modules.medical_records.tratamientos.router import treatment_error_handler
+from app.modules.medical_records.tratamientos.service import TreatmentError
+from app.modules.backup.router import router as backup_router
+from app.modules.backup import scheduler as backup_scheduler
+from app.modules.auth.planes.router import router as planes_router, plan_error_handler
+from app.modules.auth.planes.service import PlanError
+from app.modules.ai_assistant.router import router as ai_assistant_router, assistance_error_handler
+from app.modules.ai_assistant.service import AssistanceError
+from app.modules.tenants.usage_billing.router import (
+    router as billing_overages_router, billing_error_handler, billing_http_exception_handler,
+)
+from app.modules.tenants.usage_billing import worker as billing_overages_worker
+from app.modules.tenants.usage_billing.service import BillingError, BillingHttpException
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """InicializaciÃ³n de servicios: validaciÃ³n criptogrÃ¡fica CU16 y scheduler de backups."""
+    import logging
+
+    _log = logging.getLogger(__name__)
+    try:
+        from app.modules.medical_records.prescriptions.crypto import (
+            ensure_prescription_crypto_configured,
+        )
+        from app.modules.medical_records.prescriptions.service import (
+            _global_vigencia_maxima,
+        )
+
+        ensure_prescription_crypto_configured()
+        _global_vigencia_maxima()
+    except Exception as exc:
+        _log.warning("CU16 startup crypto validation warning: %s", exc)
+
+    backup_scheduler.iniciar()
+    notificaciones_scheduler.iniciar()
+    subscription_worker.start()
+    billing_overages_worker.start()
+    try:
+        yield
+    finally:
+        billing_overages_worker.stop()
+        subscription_worker.stop()
+        notificaciones_scheduler.detener()
+        backup_scheduler.detener()
+
+
+app = FastAPI(
+    title="Telemedicina API",
+    description="Backend API SaaS Multitenant para la plataforma de Telemedicina",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    lifespan=lifespan,
+)
+
+# ConfiguraciÃ³n de CORS - permite cualquier origen (JWT Bearer tokens, no cookies)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins_list,
+    allow_origin_regex=".*",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["Content-Disposition"],
+)
+
+
+@app.middleware("http")
+async def strip_backend_api_prefix(request: Request, call_next):
+    """Permite recibir peticiones a travÃ©s del proxy local /backend-api/* desde celulares en red Wi-Fi."""
+    path = request.scope.get("path", "")
+    if path == "/backend-api":
+        request.scope["path"] = "/"
+    elif path.startswith("/backend-api/"):
+        request.scope["path"] = path[len("/backend-api"):]
+    return await call_next(request)
+
+
+# Registro de routers de mÃ³dulos
+app.include_router(auth_router)
+# CU29: contrato canónico /api/v1/auth/* conservando el alias legacy /auth/*.
+app.include_router(auth_router, prefix="/api/v1")
+
+# Contexto de Tenant y ClÃ­nicas (SaaS multitenant)
+app.include_router(clinicas_router)
+app.include_router(clinicas_router, prefix="/api/v1")
+app.include_router(entity_configuration_router)
+app.include_router(tenant_management_router)
+app.include_router(tenant_management_router, prefix="/api/v1")
+app.include_router(subscription_payments_router)
+app.include_router(subscription_payments_router, prefix="/api/v1")
+app.include_router(public_onboarding_router)
+app.include_router(deactivation_requests_router)
+
+# GestiÃ³n de Usuarios, Roles y AuditorÃ­a
+app.include_router(users_management_router)
+app.include_router(users_management_router, prefix="/auth")
+app.include_router(users_management_router, prefix="/api/v1")
+app.include_router(roles_permissions_router)
+app.include_router(roles_permissions_router, prefix="/auth")
+app.include_router(roles_permissions_router, prefix="/api/v1")
+app.include_router(audit_router)
+app.include_router(audit_router, prefix="/api/v1")
+app.include_router(audit_router, prefix="/auth")
+
+# Expediente clínico e Historias Clínicas (CU03, CU09, CU10, CU11, CU12, CU13, CU16, CU17, CU28)
+app.include_router(medical_records_router)
+
+# Citas, Agenda y Perfil MÃ©dico (CU04, CU05, CU08, CU25)
+app.include_router(appointments_router)
+
+# Reportes y exportaciÃ³n (CU22/CU27)
+app.include_router(analytics_router)
+app.include_router(analytics_router, prefix="/api/v1")
+
+# Teleconsulta y Chat en Tiempo Real (CU14, CU15)
+app.include_router(communications_router)
+app.include_router(communications_router, prefix="/api/v1")
+
+# Notificaciones y Recordatorios Multicanal (CU20)
+app.include_router(notificaciones_router)
+app.include_router(notificaciones_router, prefix="/api/v1")
+
+# Respaldos de base de datos
+app.include_router(backup_router)
+app.include_router(planes_router)
+app.include_router(ai_assistant_router)
+app.add_exception_handler(PlanError, plan_error_handler)
+
+# CU36: consumo, liquidaciones inmutables y pagos Stripe test independientes.
+app.include_router(billing_overages_router)
+app.add_exception_handler(BillingError, billing_error_handler)
+app.add_exception_handler(BillingHttpException, billing_http_exception_handler)
+
+# Pagos de citas y teleconsultas + comprobantes (CU19)
+app.include_router(payments_router)
+app.include_router(payments_router, prefix="/api/v1")
+
+# CU16: formato de error uniforme {"detail", "code"}
+app.add_exception_handler(PrescriptionError, prescription_error_handler)
+app.add_exception_handler(TreatmentError, treatment_error_handler)
+app.add_exception_handler(AssistanceError, assistance_error_handler)
+# CU19: errores de negocio de pagos con su cÃ³digo HTTP.
+app.add_exception_handler(PagoError, pago_error_handler)
+
+
+
+@app.get("/", tags=["General"], summary="Health Check")
+def health_check():
+    """Endpoint de estado del servicio."""
+    return {
+        "status": "ok",
+        "app": "Telemedicina API",
+        "version": "1.0.0"
+    }
+
+
+@app.post(
+    "/",
+    tags=["Pagos"],
+    summary="Dispatcher del webhook Stripe configurado en la raÃ­z",
+)
+async def stripe_webhook_dispatcher(
+    request: Request,
+    db=Depends(get_db),
+):
+    """Despacha un evento Stripe entre pagos CU19 y suscripciones CU31.
+
+    Stripe permite una sola URL por endpoint. El endpoint configurado en el
+    panel de Stripe es la raÃ­z del backend, por lo que los metadatos de la
+    sesiÃ³n permiten seleccionar el flujo sin duplicar secretos de webhook.
+    """
+    payload = await request.body()
+    signature = request.headers.get("Stripe-Signature", "")
+
+    try:
+        evento = json.loads(payload.decode("utf-8"))
+    except Exception:
+        evento = {}
+
+    sesion = (evento.get("data") or {}).get("object") or {}
+    metadata = sesion.get("metadata") or {}
+    es_suscripcion = (
+        metadata.get("tipo") == "suscripcion"
+        or bool(metadata.get("id_pago_suscripcion"))
+        or str(sesion.get("client_reference_id") or "").startswith("suscripcion-")
+    )
+
+    if es_suscripcion:
+        from app.modules.tenants.subscription_payments.service import (
+            procesar_webhook_suscripcion,
+        )
+
+        return procesar_webhook_suscripcion(
+            db=db,
+            payload=payload,
+            signature_header=signature,
+        )
+
+    from app.modules.payments.service import procesar_webhook
+
+    return procesar_webhook(
+        db=db,
+        payload=payload,
+        signature_header=signature,
+    )
+
+app.include_router(subscription_changes_router)
