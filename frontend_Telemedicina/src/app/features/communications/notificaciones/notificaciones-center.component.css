@@ -1,0 +1,4 @@
+/* Estilos complementarios del Centro de Notificaciones CU20 */
+:host {
+  display: block;
+}

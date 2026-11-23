@@ -1,0 +1,181 @@
+<div class="space-y-6">
+  <div class="bg-white p-6 rounded-2xl shadow-sm border border-[#E8EDF4]">
+    <div class="flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-teal-50 text-[#049CAB] flex items-center justify-center">
+          <span class="material-symbols-outlined text-[24px]">groups</span>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-[#293954]">Gestión de lista de espera</h1>
+          <p class="text-sm text-gray-500">Inscripciones, posiciones y reasignación de cupos (CU07)</p>
+        </div>
+      </div>
+      <button type="button" (click)="mostrarNueva.set(!mostrarNueva())"
+        class="px-4 py-2.5 bg-[#049CAB] hover:bg-[#1FA7AE] text-white text-sm font-medium rounded-xl transition cursor-pointer">
+        Nueva inscripción
+      </button>
+    </div>
+
+    @if (mostrarNueva()) {
+      <div class="mt-5 pt-5 border-t border-[#E8EDF4] grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        <label class="block text-sm">
+          <span class="block text-gray-600 mb-1">ID de paciente *</span>
+          <input type="number" [(ngModel)]="idPaciente" min="1" class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+        </label>
+        <label class="block text-sm">
+          <span class="block text-gray-600 mb-1">Médico</span>
+          <select [(ngModel)]="idMedicoNuevo" class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]">
+            <option [ngValue]="null">Seleccione...</option>
+            @for (m of medicos(); track m.id_medico) {
+              <option [ngValue]="m.id_medico">{{ nombreMedico(m) }}</option>
+            }
+          </select>
+        </label>
+        <label class="block text-sm">
+          <span class="block text-gray-600 mb-1">ID de especialidad</span>
+          <input type="number" [(ngModel)]="idEspecialidadNueva" min="1" class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+        </label>
+        <label class="block text-sm">
+          <span class="block text-gray-600 mb-1">Prioridad (0-5)</span>
+          <input type="number" [(ngModel)]="prioridad" min="0" max="5" class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+        </label>
+        <label class="block text-sm sm:col-span-2">
+          <span class="block text-gray-600 mb-1">Motivo</span>
+          <input type="text" [(ngModel)]="motivoNuevo" maxlength="500" class="w-full px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+        </label>
+        <div class="flex items-end justify-end">
+          <button type="button" (click)="crear()" [disabled]="waitlist.accionEnCurso() || !idPaciente || (!idMedicoNuevo && !idEspecialidadNueva)"
+            class="px-5 py-2.5 bg-[#25627C] hover:bg-[#1E5B76] disabled:opacity-50 text-white text-sm font-medium rounded-xl cursor-pointer">
+            Guardar inscripción
+          </button>
+        </div>
+      </div>
+    }
+
+    <div class="mt-5 pt-5 border-t border-[#E8EDF4] flex flex-wrap gap-3 items-end">
+      <label class="block text-sm">
+        <span class="block text-gray-600 mb-1">Estado</span>
+        <select [(ngModel)]="estado" class="px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]">
+          <option value="">Todos</option>
+          <option value="EN_ESPERA">En espera</option>
+          <option value="OFRECIDO">Turno ofrecido</option>
+          <option value="CONFIRMADO">Confirmado</option>
+          <option value="RECHAZADO">Rechazado</option>
+          <option value="CANCELADO">Cancelado</option>
+        </select>
+      </label>
+      <label class="block text-sm">
+        <span class="block text-gray-600 mb-1">Médico</span>
+        <select [(ngModel)]="idMedico" class="px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]">
+          <option [ngValue]="null">Todos</option>
+          @for (m of medicos(); track m.id_medico) {
+            <option [ngValue]="m.id_medico">{{ nombreMedico(m) }}</option>
+          }
+        </select>
+      </label>
+      <label class="block text-sm">
+        <span class="block text-gray-600 mb-1">ID especialidad</span>
+        <input type="number" [(ngModel)]="idEspecialidad" min="1" class="w-36 px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+      </label>
+      <label class="block text-sm">
+        <span class="block text-gray-600 mb-1">Fecha deseada</span>
+        <input type="date" [(ngModel)]="fechaDeseada" class="px-3 py-2.5 bg-[#F0F5FB]/50 border border-[#E8EDF4] rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#049CAB]" />
+      </label>
+      <button type="button" (click)="cargar()" class="px-4 py-2.5 bg-[#049CAB] text-white text-sm font-medium rounded-xl cursor-pointer">Filtrar</button>
+      <button type="button" (click)="limpiar()" class="px-4 py-2.5 bg-white border border-[#E8EDF4] text-[#25627C] text-sm font-medium rounded-xl cursor-pointer">Limpiar</button>
+    </div>
+  </div>
+
+  @if (waitlist.error()) {
+    <div class="p-4 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-sm flex items-center gap-2">
+      <span class="material-symbols-outlined text-[20px] text-rose-600">error</span>
+      <span class="flex-grow">{{ waitlist.error() }}</span>
+      <button type="button" (click)="reintentar()" class="shrink-0 text-xs font-semibold text-primary hover:underline cursor-pointer">Reintentar</button>
+    </div>
+  }
+
+  <div class="bg-white rounded-2xl shadow-sm border border-[#E8EDF4] overflow-hidden">
+    <div class="px-6 py-4 border-b border-[#E8EDF4] flex justify-between items-center">
+      <h2 class="text-lg font-semibold text-[#293954]">Inscripciones</h2>
+      <span class="text-sm text-gray-500">{{ waitlist.pagina()?.total ?? 0 }} registro(s)</span>
+    </div>
+
+    @if (waitlist.cargando() && !waitlist.pagina()) {
+      <div class="p-12 text-center">
+        <div class="inline-block w-8 h-8 border-4 border-[#049CAB] border-t-transparent rounded-full animate-spin"></div>
+        <p class="text-sm text-gray-500 mt-3">Cargando lista de espera...</p>
+      </div>
+    } @else {
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead class="bg-[#F0F5FB] text-left text-[#25627C]">
+            <tr>
+              <th class="px-4 py-3 font-semibold">Paciente</th>
+              <th class="px-4 py-3 font-semibold">Médico / Especialidad</th>
+              <th class="px-4 py-3 font-semibold">Pos.</th>
+              <th class="px-4 py-3 font-semibold">Prioridad</th>
+              <th class="px-4 py-3 font-semibold">Estado</th>
+              <th class="px-4 py-3 font-semibold text-right">Acciones</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-[#E8EDF4]">
+            @for (entrada of waitlist.pagina()?.items ?? []; track entrada.idListaEspera) {
+              <tr>
+                <td class="px-4 py-3">
+                  <div class="font-medium text-[#293954]">{{ entrada.pacienteNombre }}</div>
+                  <div class="text-xs text-gray-500">{{ entrada.fechaDeseada ? 'Desde ' + entrada.fechaDeseada : 'Lo antes posible' }}</div>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="text-[#293954]">{{ entrada.medicoNombre || 'Cualquier médico' }}</div>
+                  <div class="text-xs text-gray-500">{{ entrada.especialidadNombre || 'Sin especialidad' }}</div>
+                </td>
+                <td class="px-4 py-3 font-semibold text-[#049CAB]">{{ entrada.posicion || '—' }}</td>
+                <td class="px-4 py-3">{{ entrada.prioridad }}</td>
+                <td class="px-4 py-3">
+                  <span class="px-2.5 py-1 rounded-full text-xs font-semibold bg-gray-100 text-gray-700">{{ etiquetaEstado(entrada.estado) }}</span>
+                </td>
+                <td class="px-4 py-3">
+                  <div class="flex flex-wrap justify-end gap-2">
+                    @if (entrada.estado === 'EN_ESPERA') {
+                      <button type="button" (click)="abrirOferta(entrada)" class="px-3 py-1.5 bg-[#049CAB] text-white text-xs font-medium rounded-lg cursor-pointer">Ofrecer cupo</button>
+                    }
+                    @if (entrada.estado === 'OFRECIDO') {
+                      <button type="button" (click)="confirmar(entrada)" class="px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg cursor-pointer">Confirmar</button>
+                      <button type="button" (click)="rechazar(entrada)" class="px-3 py-1.5 bg-white border border-rose-300 text-rose-700 text-xs font-medium rounded-lg cursor-pointer">Rechazar</button>
+                    }
+                    @if (entrada.estado === 'EN_ESPERA' || entrada.estado === 'OFRECIDO') {
+                      <button type="button" (click)="salir(entrada)" class="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs font-medium rounded-lg cursor-pointer">Cancelar</button>
+                    }
+                  </div>
+                  @if (ofreciendo() === entrada.idListaEspera) {
+                    <div class="mt-3 pt-3 border-t border-[#E8EDF4] flex flex-wrap gap-2 items-end">
+                      <label class="text-xs">
+                        <span class="block text-gray-500 mb-1">Fecha</span>
+                        <input type="date" [(ngModel)]="fechaOferta" class="px-2 py-1.5 border border-[#E8EDF4] rounded-lg text-xs" />
+                      </label>
+                      <label class="text-xs">
+                        <span class="block text-gray-500 mb-1">Inicio</span>
+                        <input type="time" [(ngModel)]="horaInicio" class="px-2 py-1.5 border border-[#E8EDF4] rounded-lg text-xs" />
+                      </label>
+                      <label class="text-xs">
+                        <span class="block text-gray-500 mb-1">Fin</span>
+                        <input type="time" [(ngModel)]="horaFin" class="px-2 py-1.5 border border-[#E8EDF4] rounded-lg text-xs" />
+                      </label>
+                      <button type="button" (click)="ofrecer(entrada)" [disabled]="waitlist.accionEnCurso() || !fechaOferta || !horaInicio"
+                        class="px-3 py-1.5 bg-[#25627C] text-white text-xs font-medium rounded-lg cursor-pointer disabled:opacity-50">Enviar oferta</button>
+                      <button type="button" (click)="ofreciendo.set(null)" class="px-3 py-1.5 text-xs text-gray-500 cursor-pointer">Cerrar</button>
+                    </div>
+                  }
+                </td>
+              </tr>
+            } @empty {
+              <tr>
+                <td colspan="6" class="px-4 py-12 text-center text-sm text-gray-500">No hay inscripciones que coincidan con los filtros.</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  </div>
+</div>

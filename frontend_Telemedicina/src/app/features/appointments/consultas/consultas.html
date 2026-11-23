@@ -1,0 +1,478 @@
+<div class="min-h-screen bg-[#F0F5FB]">
+  <!-- Header global unificado del proyecto -->
+  <app-header></app-header>
+
+  <!-- Contenedor Principal con el estilo del sistema -->
+  <main class="pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-6">
+
+    <!-- FEEDBACK TOAST / ALERT -->
+    @if (alertMessage()) {
+      <div
+        class="flex items-center justify-between p-4 rounded-2xl shadow-sm border transition-all animate-fadeIn"
+        [ngClass]="alertMessage()?.type === 'success' ? 'bg-emerald-50 text-emerald-900 border-emerald-200' : 'bg-rose-50 text-rose-900 border-rose-200'"
+      >
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-[22px]">
+            {{ alertMessage()?.type === 'success' ? 'check_circle' : 'error' }}
+          </span>
+          <span class="text-xs md:text-sm font-semibold">{{ alertMessage()?.text }}</span>
+        </div>
+        <button type="button" (click)="alertMessage.set(null)" class="text-xs font-bold hover:underline cursor-pointer">
+          ✕
+        </button>
+      </div>
+    }
+
+    <!-- ENCABEZADO DE SECCIÓN -->
+    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div>
+        <h1 class="text-2xl sm:text-3xl font-bold text-[#1e293b] tracking-tight">Gestión de Consultas</h1>
+        <p class="text-xs sm:text-sm text-slate-500 font-medium mt-1">
+          Administre el calendario de citas médicas y disponibilidad de especialistas.
+        </p>
+      </div>
+
+      <button
+        type="button"
+        (click)="cancelarEdicion(); isFormOpen.set(true);"
+        class="inline-flex items-center justify-center gap-2 bg-[#001738] hover:bg-slate-900 text-white text-xs sm:text-sm font-bold px-5 py-2.5 rounded-xl shadow-xs transition-all cursor-pointer active:scale-95"
+      >
+        <span class="material-symbols-outlined text-[18px]">add</span>
+        <span>+ Agendar Consulta</span>
+      </button>
+    </div>
+
+    
+    <!-- TARJETAS DE ESTADISTICAS -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Citas Hoy</span>
+          <span class="material-symbols-outlined text-indigo-500 bg-indigo-50 p-1.5 rounded-lg text-[18px]">calendar_today</span>
+        </div>
+        <div class="flex items-end gap-2">
+          <span class="text-3xl font-black text-slate-800">{{ stats().hoy }}</span>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow border-t-4 border-t-emerald-500">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Confirmadas</span>
+          <span class="material-symbols-outlined text-emerald-500 bg-emerald-50 p-1.5 rounded-lg text-[18px]">check_circle</span>
+        </div>
+        <div class="flex items-end gap-2">
+          <span class="text-3xl font-black text-slate-800">{{ stats().confirmadas }}</span>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow border-t-4 border-t-amber-400">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">En Espera</span>
+          <span class="material-symbols-outlined text-amber-500 bg-amber-50 p-1.5 rounded-lg text-[18px]">hourglass_empty</span>
+        </div>
+        <div class="flex items-end gap-2">
+          <span class="text-3xl font-black text-slate-800">{{ stats().pendientes }}</span>
+        </div>
+      </div>
+      <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex flex-col justify-between hover:shadow-md transition-shadow border-t-4 border-t-rose-500">
+        <div class="flex justify-between items-center mb-2">
+          <span class="text-xs font-bold text-slate-500 uppercase tracking-wider">Canceladas</span>
+          <span class="material-symbols-outlined text-rose-500 bg-rose-50 p-1.5 rounded-lg text-[18px]">event_busy</span>
+        </div>
+        <div class="flex items-end gap-2">
+          <span class="text-3xl font-black text-slate-800">{{ stats().canceladas }}</span>
+        </div>
+      </div>
+    </div>
+    <!-- BARRA DE B BÚSQUEDA Y FILTROS RÁPIDOS -->
+    <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+      <!-- Buscador Inteligente -->
+      <div class="relative flex-1">
+        <span class="material-symbols-outlined absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-[20px]">
+          search
+        </span>
+        <input
+          type="text"
+          [value]="searchTerm()"
+          (input)="onSearchChange($event)"
+          placeholder="Buscar paciente o médico..."
+          class="w-full bg-white border border-slate-200 pl-11 pr-4 py-2.5 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all shadow-xs"
+        />
+        @if (searchTerm()) {
+          <button
+            type="button"
+            (click)="searchTerm.set('')"
+            class="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 text-xs font-bold cursor-pointer"
+          >
+            ✕
+          </button>
+        }
+      </div>
+
+      <!-- Filtro por Estado -->
+      <div class="relative">
+        <select
+          [value]="selectedStatusFilter()"
+          (change)="selectedStatusFilter.set($any($event.target).value)"
+          class="bg-white border border-slate-200 text-slate-700 text-xs sm:text-sm font-semibold px-4 py-2.5 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer shadow-xs"
+        >
+          <option value="TODOS">⚡ Filtros (Todos)</option>
+          <option value="CONFIRMADA">Confirmadas</option>
+          <option value="PENDIENTE">Pendientes</option>
+          <option value="COMPLETADA">Completadas</option>
+          <option value="CANCELADA">Canceladas</option>
+        </select>
+      </div>
+
+      <!-- Filtro Hoy -->
+      <button
+        type="button"
+        (click)="filtrarPorHoy()"
+        class="px-4 py-2.5 rounded-xl border text-xs sm:text-sm font-semibold transition-all shadow-xs cursor-pointer flex items-center justify-center gap-1.5"
+        [ngClass]="selectedFilterDate() ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'"
+      >
+        <span class="material-symbols-outlined text-[18px]">calendar_today</span>
+        <span>Hoy</span>
+      </button>
+    </div>
+
+    <!-- GRID PRINCIPAL: TABLA (IZQUIERDA) + FORMULARIO (DERECHA) -->
+    <div class="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
+
+      <!-- TABLA DE CITAS MÉDICAS -->
+      <div class="xl:col-span-12 bg-white border border-[#E8EDF4] rounded-2xl shadow-xs overflow-hidden">
+        <div class="overflow-x-auto">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-[#f8fafc] border-b border-[#E8EDF4] text-slate-600 text-[11px] uppercase tracking-wider font-bold">
+                <th class="py-4 px-4 sm:px-6">Paciente</th>
+                <th class="py-4 px-4">Fecha & Hora</th>
+                <th class="py-4 px-4">Especialidad/Doctor</th>
+                <th class="py-4 px-4">Estado</th>
+                <th class="py-4 px-4 text-center">Acciones</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-slate-100 text-xs sm:text-sm font-medium text-slate-700">
+              @for (cita of paginatedCitas(); track cita.id_cita) {
+                <tr class="hover:bg-slate-50/80 transition-colors">
+                  
+                  <!-- Paciente con Iniciales y CI -->
+                  <td class="py-4 px-4 sm:px-6">
+                    <div class="flex items-center gap-3">
+                      <div class="w-10 h-10 rounded-full bg-indigo-50 text-indigo-700 flex items-center justify-center font-bold text-xs shrink-0 shadow-2xs">
+                        {{ cita.paciente_iniciales || 'PA' }}
+                      </div>
+                      <div>
+                        <p class="font-bold text-slate-900 leading-snug">{{ cita.paciente_nombre }}</p>
+                        <p class="text-[11px] font-medium text-slate-400">{{ cita.paciente_ci }}</p>
+                      </div>
+                    </div>
+                  </td>
+
+                  <!-- Fecha & Hora -->
+                  <td class="py-4 px-4">
+                    <p class="font-semibold text-slate-900">{{ formatearFechaDisplay(cita.fecha_cita) }}</p>
+                    <p class="text-[11px] font-medium text-slate-400">{{ formatearHoraDisplay(cita.hora_inicio) }}</p>
+                  </td>
+
+                  <!-- Especialidad / Doctor -->
+                  <td class="py-4 px-4">
+                    <p class="font-bold text-slate-900">{{ cita.especialidad_nombre || 'Medicina General' }}</p>
+                    <p class="text-[11px] font-medium text-slate-500">{{ cita.medico_nombre }}</p>
+                  </td>
+
+                  <!-- Estado -->
+                  <td class="py-4 px-4">
+                    @if (cita.estado === 'CONFIRMADA') {
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-emerald-50 text-emerald-700">
+                        Confirmada
+                      </span>
+                    } @else if (cita.estado === 'PENDIENTE') {
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-amber-50 text-amber-700">
+                        Pendiente
+                      </span>
+                    } @else if (cita.estado === 'COMPLETADA') {
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-blue-50 text-blue-700">
+                        Completada
+                      </span>
+                    } @else {
+                      <span class="inline-flex items-center px-3 py-1 rounded-full text-[11px] font-semibold bg-slate-100 text-slate-700">
+                        {{ cita.estado }}
+                      </span>
+                    }
+                  </td>
+
+                  <!-- Acciones: Chatear (CU15) + Editar en Tiempo Real + Eliminar Dinámico -->
+                  <td class="py-4 px-4 text-center">
+                    <div class="flex items-center justify-center gap-1.5">
+                      <button
+                        type="button"
+                        (click)="abrirChatCita(cita)"
+                        class="p-1.5 text-slate-400 hover:text-[#00897b] hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                        title="Chatear con el paciente (CU15)"
+                      >
+                        <span class="material-symbols-outlined text-[18px]">chat</span>
+                      </button>
+                      <button
+                        type="button"
+                        (click)="iniciarEdicion(cita)"
+                        class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                        title="Editar cita en tiempo real"
+                      >
+                        <span class="material-symbols-outlined text-[18px]">edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        (click)="solicitarEliminar(cita)"
+                        class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors cursor-pointer"
+                        title="Eliminar cita dinámicamente"
+                      >
+                        <span class="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
+                    </div>
+                  </td>
+
+                </tr>
+              } @empty {
+                <tr>
+                  <td colspan="5" class="py-12 text-center text-slate-400 font-medium text-xs sm:text-sm">
+                    <div class="flex flex-col items-center justify-center gap-2">
+                      <span class="material-symbols-outlined text-[36px] text-slate-300">event_busy</span>
+                      <p>No se encontraron consultas registradas.</p>
+                      <button
+                        type="button"
+                        (click)="limpiarFiltros()"
+                        class="text-indigo-600 hover:underline text-xs font-semibold cursor-pointer"
+                      >
+                        Limpiar filtros
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer de la Tabla -->
+        <div class="p-4 bg-[#fcfdfe] border-t border-[#E8EDF4] flex items-center justify-between text-xs text-slate-500 font-medium">
+          <span>Total de consultas: <strong class="text-slate-800">{{ filteredCitas().length }}</strong></span>
+          <span>Hospital San Juan de Dios</span>
+        </div>
+      </div>
+
+      <!-- FORMULARIO LATERAL: AGENDAR / EDITAR CONSULTA -->
+  @if (isFormOpen()) {
+    <div class="fixed inset-0 z-[100] bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto flex justify-center items-start animate-fadeIn">
+      <div class="bg-white border border-[#E8EDF4] rounded-2xl shadow-2xl overflow-hidden max-w-[500px] w-full mt-10 mb-20 animate-scaleUp relative flex flex-col">
+        
+        <!-- HEADER DEL MODAL (Estilo Imagen) -->
+        <div class="bg-[#002D5A] text-white p-6 pb-8 flex items-start justify-between relative overflow-hidden">
+          <div class="flex gap-4 items-center relative z-10">
+            <div class="w-12 h-12 bg-[#004A8C] rounded-xl flex items-center justify-center shrink-0 shadow-inner border border-white/10">
+              <span class="material-symbols-outlined text-[#40E0D0] text-[24px]">event_available</span>
+            </div>
+            <div>
+              <h2 class="font-bold text-2xl text-white tracking-tight leading-tight">
+                {{ isEditing() ? 'Editar Consulta' : 'Agendar Nueva Consulta' }}
+              </h2>
+              <p class="text-blue-200 text-xs font-medium mt-1">Registro de cita presencial o telemedicina</p>
+            </div>
+          </div>
+          <div class="bg-[#004A8C] text-[#40E0D0] text-[10px] font-black uppercase px-2.5 py-1 rounded-md text-center leading-tight relative z-10 shadow-sm border border-white/5">
+            PASO<br/>1/2
+          </div>
+          <!-- Decorative curve -->
+          <div class="absolute -bottom-10 -right-10 w-40 h-40 bg-white/5 rounded-full blur-2xl"></div>
+        </div>
+
+        <!-- FORMULARIO SCROLL -->
+        <form [formGroup]="appointmentForm" (ngSubmit)="guardarCita()" class="p-6 space-y-6 bg-white -mt-4 rounded-t-2xl relative z-20">
+          
+          <!-- Paciente -->
+          <div>
+            <div class="flex justify-between items-end mb-2">
+              <label class="flex items-center gap-1.5 text-sm font-bold text-[#002D5A]"><span class="material-symbols-outlined text-[18px] text-[#40E0D0]">person</span> Paciente</label>
+              @if (!isEditing()) {
+                <button type="button" (click)="toggleNewPatient()" class="text-[11px] font-bold text-[#004A8C] hover:text-[#002D5A] flex items-center gap-1 transition-colors">
+                  <span class="material-symbols-outlined text-[14px]">person_add</span> + {{ isNewPatient() ? 'Buscar Existente' : 'Nuevo Paciente' }}
+                </button>
+              }
+            </div>
+            @if (!isNewPatient()) {
+              <select formControlName="id_paciente" class="w-full bg-[#F5F7FA] border border-transparent hover:border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20 focus:border-[#002D5A] transition-all cursor-pointer shadow-sm appearance-none">
+                <option value="" disabled selected>Seleccionar paciente...</option>
+                @for (p of pacientesList(); track p.id_paciente) {
+                  <option [ngValue]="p.id_paciente">{{ p.nombres }} {{ p.apellidos }} (HC-{{ p.id_paciente | number:'3.0' }})</option>
+                }
+              </select>
+            } @else {
+              <div class="space-y-3 bg-[#F5F7FA] p-4 rounded-xl border border-slate-100 shadow-sm" [formGroup]="newPatientForm">
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">Nombres</label>
+                    <input formControlName="nombres" type="text" placeholder="Ej: Maria Elena" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">Apellidos</label>
+                    <input formControlName="apellidos" type="text" placeholder="Ej: Rodriguez Lpez" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20" />
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">C.I.</label>
+                    <input formControlName="ci" type="text" placeholder="Ej: 9821112" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">Gnero</label>
+                    <select formControlName="genero" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20 cursor-pointer">
+                      <option value="M">Masculino</option>
+                      <option value="F">Femenino</option>
+                      <option value="OTRO">Otro</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">Fecha Nac.</label>
+                    <input formControlName="fecha_nacimiento" type="date" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20" />
+                  </div>
+                  <div>
+                    <label class="block text-[11px] font-bold text-slate-500 mb-1">Telfono</label>
+                    <input formControlName="telefono" type="tel" placeholder="Ej: +591 71234567" class="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20" />
+                  </div>
+                </div>
+              </div>
+            }
+          </div>
+
+          <!-- Especialidad / Medico -->
+          <div>
+            <label class="flex items-center gap-1.5 text-sm font-bold text-[#002D5A] mb-2"><span class="material-symbols-outlined text-[18px] text-[#40E0D0]">medical_services</span> Especialidad y Mdico Asignado</label>
+            <select formControlName="id_medico" (change)="onFormChange()" class="w-full bg-[#F5F7FA] border border-transparent hover:border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20 focus:border-[#002D5A] transition-all cursor-pointer shadow-sm appearance-none">
+              <option value="" disabled selected>Seleccionar mdico...</option>
+              @for (m of medicosList(); track m.id_medico) {
+                <option [ngValue]="m.id_medico">
+                  Dr. {{ m.usuario?.apellidos }} - {{ m.especialidades[0]?.nombre || 'General' }}
+                </option>
+              }
+            </select>
+          </div>
+
+          <!-- Modalidad -->
+          <div>
+             <label class="flex items-center gap-1.5 text-sm font-bold text-[#002D5A] mb-2"><span class="material-symbols-outlined text-[18px] text-[#40E0D0]">devices</span> Modalidad de Consulta</label>
+             <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+               <div (click)="setTipoConsulta('TELEMEDICINA')" class="rounded-xl p-3 flex items-center justify-center gap-2 font-bold text-sm cursor-pointer transition-all shadow-sm"
+                 [ngClass]="tipoConsulta() === 'TELEMEDICINA' ? 'bg-[#EBF3FF] border-2 border-[#004A8C] text-[#002D5A]' : 'bg-[#F5F7FA] border-2 border-transparent text-slate-500 hover:border-slate-300'">
+                 <span class="material-symbols-outlined text-[20px]" [class.text-[#004A8C]]="tipoConsulta() === 'TELEMEDICINA'">videocam</span>
+                 Teleconsulta HD
+               </div>
+               <div (click)="setTipoConsulta('PRESENCIAL')" class="rounded-xl p-3 flex items-center justify-center gap-2 font-bold text-sm cursor-pointer transition-all shadow-sm"
+                 [ngClass]="tipoConsulta() === 'PRESENCIAL' ? 'bg-[#EBF3FF] border-2 border-[#004A8C] text-[#002D5A]' : 'bg-[#F5F7FA] border-2 border-transparent text-slate-500 hover:border-slate-300'">
+                 <span class="material-symbols-outlined text-[20px]" [class.text-[#004A8C]]="tipoConsulta() === 'PRESENCIAL'">domain</span>
+                 Presencial Sede
+               </div>
+             </div>
+          </div>
+
+          <!-- Fecha -->
+          <div>
+            <label class="flex items-center gap-1.5 text-sm font-bold text-[#002D5A] mb-2"><span class="material-symbols-outlined text-[18px] text-[#40E0D0]">calendar_month</span> Fecha de Consulta</label>
+            <input type="date" formControlName="fecha_cita" (change)="onFormChange()" class="w-full bg-[#F5F7FA] border border-transparent hover:border-slate-300 rounded-xl px-4 py-3 text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-[#002D5A]/20 focus:border-[#002D5A] transition-all shadow-sm" />
+          </div>
+
+          <!-- Horarios Disponibles -->
+          <div>
+            <div class="flex justify-between items-end mb-2">
+              <label class="flex items-center gap-1.5 text-sm font-bold text-[#002D5A]"><span class="material-symbols-outlined text-[18px] text-[#40E0D0]">schedule</span> Horarios Disponibles <span class="text-slate-500 font-normal text-xs">(Slots de 30 min)</span></label>
+              <span class="text-[10px] font-bold" [ngClass]="availableSlots().length - reservedSlots().length === 0 ? 'text-red-500' : 'text-[#004A8C]'">{{ availableSlots().length - reservedSlots().length }} cupos libres</span>
+            </div>
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              @for (slot of availableSlots(); track slot) {
+                <button type="button" (click)="!reservedSlots().includes(slot) && selectedSlot.set(slot)" class="py-2.5 rounded-lg text-sm font-bold transition-all text-center shadow-sm border flex items-center justify-center gap-1"
+                  [disabled]="reservedSlots().includes(slot)"
+                  [ngClass]="{
+                    'bg-[#002D5A] text-white border-[#002D5A] cursor-pointer': selectedSlot() === slot && !reservedSlots().includes(slot),
+                    'bg-[#F5F7FA] text-slate-600 border-transparent hover:border-slate-300 cursor-pointer': selectedSlot() !== slot && !reservedSlots().includes(slot),
+                    'bg-red-50 text-red-500 border-red-200 cursor-not-allowed opacity-70': reservedSlots().includes(slot)
+                  }">
+                  @if (reservedSlots().includes(slot)) {
+                    <span class="material-symbols-outlined text-[14px]">lock</span>
+                  }
+                  {{ slot }}
+                  @if (selectedSlot() === slot && !reservedSlots().includes(slot)) {
+                    <span class="material-symbols-outlined text-[14px] font-black">check</span>
+                  }
+                </button>
+              }
+            </div>
+          </div>
+
+          <!-- Botones Footer -->
+          <div class="flex items-center gap-3 pt-4 border-t border-slate-100">
+            <button type="button" (click)="isFormOpen.set(false); cancelarEdicion()" class="w-1/3 py-3.5 px-4 rounded-xl bg-[#F5F7FA] hover:bg-slate-200 text-slate-600 text-sm font-bold transition-all text-center cursor-pointer">
+              Cancelar
+            </button>
+            <button type="submit" class="w-2/3 py-3.5 px-4 rounded-xl bg-[#002D5A] hover:bg-[#001f3f] text-white text-sm font-bold transition-all flex items-center justify-center gap-2 shadow-md cursor-pointer active:scale-95">
+              <span class="material-symbols-outlined text-[18px]">verified</span>
+              Confirmar Cita
+            </button>
+          </div>
+
+        </form>
+      </div>
+    </div>
+  }
+
+    </div>
+  </main>
+
+  <!-- MODAL DE CONFIRMACIÓN DE ELIMINACIÓN -->
+  @if (showDeleteModal()) {
+    <div class="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-fadeIn">
+      <div class="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 animate-scaleUp">
+        <div class="flex items-center gap-3 text-red-600">
+          <div class="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+            <span class="material-symbols-outlined text-[24px]">delete_forever</span>
+          </div>
+          <div>
+            <h3 class="font-bold text-base text-slate-900">¿Eliminar cita médica?</h3>
+            <p class="text-xs text-slate-500">Esta acción no se puede deshacer.</p>
+          </div>
+        </div>
+
+        <p class="text-xs sm:text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">
+          ¿Estás seguro de que deseas eliminar permanentemente la cita de
+          <strong class="text-slate-900">{{ citaToDelete()?.paciente_nombre }}</strong>
+          para el <strong class="text-slate-900">{{ formatearFechaDisplay(citaToDelete()?.fecha_cita || '') }}</strong>?
+        </p>
+
+        <div class="flex items-center justify-end gap-3 pt-2">
+          <button
+            type="button"
+            (click)="cerrarModalEliminar()"
+            class="py-2 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs sm:text-sm font-semibold cursor-pointer"
+          >
+            Cancelar
+          </button>
+          <button
+            type="button"
+            (click)="confirmarEliminar()"
+            class="py-2 px-4 rounded-xl bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm font-bold shadow-xs cursor-pointer active:scale-95"
+          >
+            Sí, eliminar
+          </button>
+        </div>
+      </div>
+    </div>
+  }
+
+  <!-- WIDGET FLOTANTE DE CHAT CU15 (POPOVER ESQUINA INFERIOR DERECHA) -->
+  @if (showChatWidget() && chatCitaActiva()) {
+    <app-chat-floating-widget
+      [idCita]="chatCitaActiva()!.id_cita"
+      [citaInfo]="chatCitaActiva()"
+      (cerrar)="cerrarChatCita()"
+    ></app-chat-floating-widget>
+  }
+
+</div>
