@@ -3,8 +3,18 @@ name: Mobile CI/CD
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'mobile_telemedicina/**'
+      - '.github/workflows/mobile.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'mobile_telemedicina/**'
+      - '.github/workflows/mobile.yml'
+
+defaults:
+  run:
+    working-directory: mobile_telemedicina
 
 env:
   FLUTTER_VERSION: '3.44.5'
@@ -49,7 +59,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: coverage
-          path: coverage/
+          path: mobile_telemedicina/coverage/
           retention-days: 7
 
   # Patrol queda fuera del CI del PR hasta contar con pruebas válidas y un emulador Android.
@@ -86,8 +96,8 @@ jobs:
         with:
           name: android-release
           path: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/bundle/release/app-release.aab
+            mobile_telemedicina/build/app/outputs/flutter-apk/app-release.apk
+            mobile_telemedicina/build/app/outputs/bundle/release/app-release.aab
           retention-days: 30
 
   build-ios:
@@ -107,7 +117,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: ios-release
-          path: build/ios/iphoneos/Runner.app
+          path: mobile_telemedicina/build/ios/iphoneos/Runner.app
           retention-days: 30
 
   build-web:
@@ -125,7 +135,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: web-release
-          path: build/web/
+          path: mobile_telemedicina/build/web/
           retention-days: 7
 
   deploy-web-preview:
@@ -137,7 +147,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: web-release
-          path: build/web/
+          path: mobile_telemedicina/build/web/
       - name: Deploy to Firebase Preview
         if: false  # Configurar cuando se tenga Firebase
         uses: FirebaseExtended/action-hosting-deploy@v0

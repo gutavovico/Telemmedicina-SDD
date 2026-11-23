@@ -3,8 +3,18 @@ name: Backend CI/CD
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'backend_Telemedicina/**'
+      - '.github/workflows/backend.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'backend_Telemedicina/**'
+      - '.github/workflows/backend.yml'
+
+defaults:
+  run:
+    working-directory: backend_Telemedicina
 
 env:
   PYTHON_VERSION: '3.12'
@@ -37,6 +47,7 @@ jobs:
         with:
           python-version: ${{ env.PYTHON_VERSION }}
           cache: 'pip'
+          cache-dependency-path: backend_Telemedicina/requirements.txt
 
       - name: Install dependencies
         run: |

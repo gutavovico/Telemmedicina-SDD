@@ -3,8 +3,18 @@ name: Frontend CI/CD
 on:
   push:
     branches: [main, develop]
+    paths:
+      - 'frontend_Telemedicina/**'
+      - '.github/workflows/frontend.yml'
   pull_request:
     branches: [main]
+    paths:
+      - 'frontend_Telemedicina/**'
+      - '.github/workflows/frontend.yml'
+
+defaults:
+  run:
+    working-directory: frontend_Telemedicina
 
 env:
   NODE_VERSION: '24'
@@ -20,6 +30,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: frontend_Telemedicina/package-lock.json
       - run: npm ci --legacy-peer-deps
 
   lint:
@@ -32,6 +43,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: frontend_Telemedicina/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npm run lint 2>&1 || echo "Lint script no configurado, saltando"
 
@@ -45,6 +57,7 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: frontend_Telemedicina/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npm run test:vitest
 
@@ -58,12 +71,13 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: frontend_Telemedicina/package-lock.json
       - run: npm ci --legacy-peer-deps
       - run: npm run build
       - uses: actions/upload-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: frontend_Telemedicina/dist/
           retention-days: 7
 
   e2e:
@@ -76,11 +90,12 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: 'npm'
+          cache-dependency-path: frontend_Telemedicina/package-lock.json
       - run: npm ci --legacy-peer-deps
       - uses: actions/cache@v4
         with:
           path: ~/.cache/Cypress
-          key: cypress-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          key: cypress-${{ runner.os }}-${{ hashFiles('frontend_Telemedicina/package-lock.json') }}
       - run: npx cypress install
       - run: npm run build
       - name: Start app and run Cypress
@@ -122,12 +137,12 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: frontend_Telemedicina/dist/
       - name: Deploy to Netlify Preview
         if: false  # Configurar cuando se tenga cuenta Netlify
         uses: nwtgck/actions-netlify@v3
         with:
-          publish-dir: './dist/frontend_Telemedicina/browser'
+          publish-dir: './frontend_Telemedicina/dist/frontend_Telemedicina/browser'
           production-branch: main
           github-token: ${{ secrets.GITHUB_TOKEN }}
           deploy-message: "Preview deploy for PR #${{ github.event.number }}"
@@ -145,7 +160,7 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: dist
-          path: dist/
+          path: frontend_Telemedicina/dist/
       - name: Deploy to Production
         if: false  # Configurar cuando se tenga hosting
         run: |
