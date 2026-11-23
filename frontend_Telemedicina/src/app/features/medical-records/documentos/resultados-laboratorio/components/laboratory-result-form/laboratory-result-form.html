@@ -1,0 +1,174 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-3xl space-y-6">
+    <nav aria-label="Ruta de navegación" class="flex items-center gap-2 text-sm">
+      <a routerLink="/admin/resultados-laboratorio" class="inline-flex items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1.5 font-medium text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+        Resultados de laboratorio
+      </a>
+    </nav>
+
+    <header class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-[#049CAB]">
+          <span class="material-symbols-outlined text-[24px]" aria-hidden="true">upload_file</span>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-[#293954]">Cargar resultado de laboratorio</h1>
+          <p class="text-sm text-gray-500">Adjunte el resultado (PDF, JPG o PNG, hasta 10 MB) e identifique el estudio, la fecha y el laboratorio de origen.</p>
+        </div>
+      </div>
+    </header>
+
+    @if (creado(); as resultado) {
+      <section class="rounded-2xl border border-emerald-200 bg-emerald-50 p-6 text-emerald-900" role="status" aria-live="polite" data-testid="carga-exitosa">
+        <h2 class="flex items-center gap-2 text-lg font-semibold">
+          <span class="material-symbols-outlined" aria-hidden="true">check_circle</span>
+          Resultado incorporado al expediente
+        </h2>
+        <p class="mt-2 text-sm">
+          Se registró el resultado de <strong>{{ resultado.nombre_examen || resultado.codigo_examen }}</strong>
+          para <strong>{{ resultado.paciente_nombre }}</strong>.
+        </p>
+        <div class="mt-4 flex flex-wrap gap-3">
+          <a [routerLink]="['/admin/resultados-laboratorio', resultado.id_resultado]" class="rounded-xl bg-[#049CAB] px-4 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">Ver resultado</a>
+          <button type="button" (click)="nuevaCarga()" class="rounded-xl border border-emerald-300 bg-white px-4 py-2 text-sm font-semibold text-emerald-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-600">Cargar otro resultado</button>
+        </div>
+      </section>
+    } @else {
+      <form [formGroup]="formulario" (ngSubmit)="enviar()" novalidate class="space-y-5 rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm" aria-describedby="resumen-errores">
+        <!-- Resumen de errores (anunciado por lectores de pantalla) -->
+        <div id="resumen-errores" aria-live="assertive" role="alert" class="min-h-[1.25rem]">
+          @if (errorGeneral(); as mensaje) {
+            <p class="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800" data-testid="error-general">{{ mensaje }}</p>
+          }
+        </div>
+
+        <app-lab-patient-picker
+          inputId="paciente"
+          etiqueta="Paciente"
+          [requerido]="true"
+          [error]="mensajeCampo('paciente', 'id_paciente')"
+          (pacienteSeleccionado)="alElegirPaciente($event)"
+        />
+
+        <div>
+          <label for="codigo_examen" class="mb-1 block text-sm font-medium text-[#293954]">
+            Estudio <span class="text-rose-600" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span>
+          </label>
+          @if (catalogo.cargando()) {
+            <p class="text-sm text-gray-500" role="status">Cargando catálogo de estudios…</p>
+          } @else if (catalogo.noDisponible(); as aviso) {
+            <p class="mb-2 rounded-lg border border-amber-200 bg-amber-50 p-2 text-xs text-amber-800" role="status" data-testid="aviso-catalogo">
+              {{ aviso }}
+              <button type="button" class="ml-1 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" (click)="catalogo.cargar()">Reintentar</button>
+            </p>
+            <input id="codigo_examen" type="text" formControlName="codigo_examen" maxlength="50" autocomplete="off"
+              placeholder="Ej.: HEMOGRAMA"
+              class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+              [attr.aria-invalid]="mensajeCampo('codigo_examen') ? 'true' : null"
+              [attr.aria-describedby]="mensajeCampo('codigo_examen') ? 'codigo_examen-error' : null"
+              (input)="limpiarErrorServidor('codigo_examen')" />
+          } @else {
+            <select id="codigo_examen" formControlName="codigo_examen"
+              class="w-full rounded-xl border border-[#D5DDE8] bg-white px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+              [attr.aria-invalid]="mensajeCampo('codigo_examen') ? 'true' : null"
+              [attr.aria-describedby]="mensajeCampo('codigo_examen') ? 'codigo_examen-error' : null"
+              (change)="limpiarErrorServidor('codigo_examen')">
+              <option value="">Seleccione un estudio…</option>
+              @for (estudio of catalogo.opciones(); track estudio.codigo) {
+                <option [value]="estudio.codigo">{{ estudio.nombre }} ({{ estudio.codigo }})</option>
+              }
+            </select>
+          }
+          @if (mensajeCampo('codigo_examen'); as mensaje) {
+            <p id="codigo_examen-error" class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+          }
+        </div>
+
+        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+          <div>
+            <label for="fecha_realizacion" class="mb-1 block text-sm font-medium text-[#293954]">
+              Fecha de realización <span class="text-rose-600" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span>
+            </label>
+            <input id="fecha_realizacion" type="date" formControlName="fecha_realizacion" [max]="hoy"
+              class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+              [attr.aria-invalid]="mensajeCampo('fecha_realizacion') ? 'true' : null"
+              [attr.aria-describedby]="mensajeCampo('fecha_realizacion') ? 'fecha_realizacion-error' : null"
+              (input)="limpiarErrorServidor('fecha_realizacion')" />
+            @if (mensajeCampo('fecha_realizacion'); as mensaje) {
+              <p id="fecha_realizacion-error" class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+            }
+          </div>
+
+          <div>
+            <label for="laboratorio_origen" class="mb-1 block text-sm font-medium text-[#293954]">
+              Laboratorio de origen <span class="text-rose-600" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span>
+            </label>
+            <input id="laboratorio_origen" type="text" formControlName="laboratorio_origen" maxlength="200" autocomplete="off"
+              class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+              [attr.aria-invalid]="mensajeCampo('laboratorio_origen') ? 'true' : null"
+              [attr.aria-describedby]="mensajeCampo('laboratorio_origen') ? 'laboratorio_origen-error' : null"
+              (input)="limpiarErrorServidor('laboratorio_origen')" />
+            @if (mensajeCampo('laboratorio_origen'); as mensaje) {
+              <p id="laboratorio_origen-error" class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+            }
+          </div>
+        </div>
+
+        <div>
+          <label for="id_orden" class="mb-1 block text-sm font-medium text-[#293954]">Número de orden de laboratorio (opcional)</label>
+          <input id="id_orden" type="number" min="1" step="1" formControlName="id_orden" inputmode="numeric"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB] sm:max-w-xs"
+            [attr.aria-invalid]="mensajeCampo('id_orden') ? 'true' : null"
+            [attr.aria-describedby]="'id_orden-ayuda' + (mensajeCampo('id_orden') ? ' id_orden-error' : '')"
+            (input)="limpiarErrorServidor('id_orden')" />
+          <p id="id_orden-ayuda" class="mt-1 text-xs text-gray-500">Debe ser una orden firmada del mismo paciente que incluya el estudio.</p>
+          @if (mensajeCampo('id_orden'); as mensaje) {
+            <p id="id_orden-error" class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+          }
+        </div>
+
+        <div>
+          <label for="observaciones" class="mb-1 block text-sm font-medium text-[#293954]">Observaciones (opcional)</label>
+          <textarea id="observaciones" rows="3" maxlength="2000" formControlName="observaciones"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+            [attr.aria-invalid]="mensajeCampo('observaciones') ? 'true' : null"></textarea>
+          @if (mensajeCampo('observaciones'); as mensaje) {
+            <p class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+          }
+        </div>
+
+        <div>
+          <label for="archivo" class="mb-1 block text-sm font-medium text-[#293954]">
+            Archivo del resultado <span class="text-rose-600" aria-hidden="true">*</span><span class="sr-only">(obligatorio)</span>
+          </label>
+          <input #campoArchivo id="archivo" type="file" [accept]="acceptArchivo" (change)="alElegirArchivo($event)"
+            class="block w-full text-sm text-[#293954] file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-4 file:py-2 file:font-semibold file:text-[#049CAB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]"
+            [attr.aria-invalid]="mensajeCampo('archivo') ? 'true' : null"
+            [attr.aria-describedby]="'archivo-ayuda' + (mensajeCampo('archivo') ? ' archivo-error' : '')" />
+          <p id="archivo-ayuda" class="mt-1 text-xs text-gray-500">PDF, JPG o PNG. Tamaño máximo 10 MB.</p>
+          @if (formulario.controls.archivo.value; as archivo) {
+            <p class="mt-1 text-xs text-gray-600" data-testid="archivo-elegido">{{ archivo.name }} · {{ formatearTamano(archivo.size) }}</p>
+          }
+          @if (mensajeCampo('archivo'); as mensaje) {
+            <p id="archivo-error" class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+          }
+        </div>
+
+        <div class="flex flex-wrap items-center gap-3 border-t border-[#E8EDF4] pt-5">
+          <button type="submit" [disabled]="enviando()"
+            class="inline-flex items-center gap-2 rounded-xl bg-[#049CAB] px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+            @if (enviando()) {
+              <span class="material-symbols-outlined animate-spin text-[18px]" aria-hidden="true">progress_activity</span>
+              Guardando…
+            } @else {
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">save</span>
+              Guardar resultado
+            }
+          </button>
+          <a routerLink="/admin/resultados-laboratorio" class="rounded-xl border border-[#D5DDE8] px-5 py-2.5 text-sm font-medium text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Cancelar</a>
+        </div>
+      </form>
+    }
+  </div>
+</main>

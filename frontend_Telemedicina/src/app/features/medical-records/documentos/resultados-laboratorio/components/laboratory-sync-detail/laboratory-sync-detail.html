@@ -1,0 +1,194 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-6xl space-y-6">
+    <nav aria-label="Ruta de navegación" class="flex items-center gap-2 text-sm">
+      <a routerLink="/admin/resultados-laboratorio/sincronizaciones" class="inline-flex items-center gap-1 rounded-full bg-secondary-container/30 px-3 py-1.5 font-medium text-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">arrow_back</span>
+        Sincronizaciones
+      </a>
+    </nav>
+
+    <div aria-live="polite" class="space-y-2">
+      @if (error(); as mensaje) {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-informe">
+          <span>{{ mensaje }}</span>
+          @if (!noEncontrada()) {
+            <button type="button" (click)="cargar()" class="underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">Reintentar</button>
+          }
+        </div>
+      }
+      @if (errorReintento(); as mensaje) {
+        <p class="rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-reintento">{{ mensaje }}</p>
+      }
+      @if (exitoReintento(); as mensaje) {
+        <p class="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800" role="status" data-testid="exito-reintento">{{ mensaje }}</p>
+      }
+    </div>
+
+    @if (cargando() && !sincronizacion()) {
+      <p class="rounded-2xl border border-[#E8EDF4] bg-white p-8 text-center text-sm text-gray-500" role="status" data-testid="cargando">Cargando informe…</p>
+    }
+
+    @if (sincronizacion(); as s) {
+      <header class="rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 class="text-2xl font-bold text-[#293954]">Informe de la sincronización {{ s.id_sincronizacion }}</h1>
+            <p class="text-sm text-gray-500">
+              Fuente <span class="font-semibold text-[#293954]" data-testid="fuente">{{ s.fuente_codigo || s.id_fuente }}</span>
+              · iniciada {{ s.iniciado_en | date: 'dd/MM/yyyy HH:mm' }}
+              @if (s.finalizado_en) { · finalizada {{ s.finalizado_en | date: 'dd/MM/yyyy HH:mm' }} }
+            </p>
+          </div>
+          <app-lab-sync-badge tipo="lote" [valor]="s.estado" />
+        </div>
+        @if (s.estado === 'EN_PROCESO') {
+          <p class="mt-3 rounded-xl border border-sky-200 bg-sky-50 p-3 text-sm text-sky-800" data-testid="aviso-en-proceso">
+            El lote sigue en proceso o el servidor se interrumpió antes de cerrarlo. Los ítems ya confirmados se muestran abajo; reenviar el lote completo es seguro (lo ya integrado queda duplicado).
+            <button type="button" (click)="cargar()" class="ml-2 underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-sky-700">Actualizar</button>
+          </p>
+        }
+
+        <dl class="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6" data-testid="totales">
+          <div class="rounded-xl bg-[#F7F9FC] p-3"><dt class="text-xs text-gray-500">Total de ítems</dt><dd class="text-xl font-bold text-[#293954]" data-testid="total-items">{{ s.total_items }}</dd></div>
+          <div class="rounded-xl bg-emerald-50 p-3"><dt class="text-xs text-emerald-800">Incorporados</dt><dd class="text-xl font-bold text-emerald-800" data-testid="total-incorporados">{{ s.incorporados }}</dd></div>
+          <div class="rounded-xl bg-amber-50 p-3"><dt class="text-xs text-amber-800">Pendientes</dt><dd class="text-xl font-bold text-amber-800" data-testid="total-pendientes">{{ s.pendientes }}</dd></div>
+          <div class="rounded-xl bg-sky-50 p-3"><dt class="text-xs text-sky-800">Duplicados</dt><dd class="text-xl font-bold text-sky-800" data-testid="total-duplicados">{{ s.duplicados }}</dd></div>
+          <div class="rounded-xl bg-rose-50 p-3"><dt class="text-xs text-rose-800">Con error</dt><dd class="text-xl font-bold text-rose-800" data-testid="total-errores">{{ s.con_error }}</dd></div>
+          <div class="rounded-xl bg-[#F7F9FC] p-3"><dt class="text-xs text-gray-500">Reintentos</dt><dd class="text-xl font-bold text-[#293954]" data-testid="total-reintentos">{{ s.reintentos }}</dd></div>
+        </dl>
+
+        @if (hayPendientes() && acceso.puedeRevisar()) {
+          <p class="mt-4">
+            <a routerLink="/admin/resultados-laboratorio/revision" [queryParams]="{ id_fuente: s.id_fuente }" data-testid="enlace-revision"
+              class="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
+              <span class="material-symbols-outlined text-[18px]" aria-hidden="true">pending_actions</span>
+              Revisar los {{ s.pendientes }} pendiente(s) de esta fuente
+            </a>
+          </p>
+        }
+      </header>
+
+      <section class="overflow-hidden rounded-2xl border border-[#E8EDF4] bg-white shadow-sm">
+        <h2 class="border-b border-[#E8EDF4] px-4 py-3 text-lg font-semibold text-[#293954]">Resultado por ítem</h2>
+        @if (items().length === 0) {
+          <p class="p-8 text-center text-sm text-gray-500" data-testid="sin-items">Esta sincronización no tiene ítems registrados todavía.</p>
+        } @else {
+          <div class="overflow-x-auto">
+            <table class="min-w-full divide-y divide-[#E8EDF4] text-sm">
+              <caption class="sr-only">Resultado de cada ítem del lote</caption>
+              <thead class="bg-[#F7F9FC] text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+                <tr>
+                  <th scope="col" class="px-4 py-3">Identificador externo</th>
+                  <th scope="col" class="px-4 py-3">Estado</th>
+                  <th scope="col" class="px-4 py-3">Código y mensaje</th>
+                  <th scope="col" class="px-4 py-3 text-right">Intento</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-[#E8EDF4]">
+                @for (i of items(); track i.id_externo) {
+                  <tr data-testid="fila-item">
+                    <td class="whitespace-nowrap px-4 py-3 font-medium text-[#293954]" data-testid="item-id">{{ i.id_externo }}</td>
+                    <td class="px-4 py-3"><app-lab-sync-badge tipo="item" [valor]="i.resultado" /></td>
+                    <td class="px-4 py-3 text-gray-700" data-testid="item-detalle">
+                      @if (detalleDe(i); as d) {
+                        @if (d.codigo) { <span class="rounded bg-gray-100 px-1.5 py-0.5 font-mono text-xs text-gray-700" data-testid="item-codigo">{{ d.codigo }}</span> }
+                        @if (d.mensaje) { <span class="ml-1">{{ d.mensaje }}</span> }
+                        @if (!d.codigo && !d.mensaje) { <span class="text-gray-400">—</span> }
+                      }
+                    </td>
+                    <td class="px-4 py-3 text-right text-[#293954]" data-testid="item-intento">{{ i.intento }}</td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+        }
+      </section>
+
+      @if (acceso.puedeSincronizar() && itemsEnError().length > 0 && !noEncontrada()) {
+        <section aria-labelledby="titulo-reintento" class="space-y-4 rounded-2xl border border-rose-200 bg-white p-6 shadow-sm" [attr.aria-busy]="reintentando()" data-testid="panel-reintento">
+          <div>
+            <h2 id="titulo-reintento" class="text-lg font-semibold text-[#293954]">Reintentar ítems con error</h2>
+            <p class="text-sm text-gray-500">Adjunte el archivo corregido de cada ítem que quiera reintentar. Solo se reenvían esos ítems; lo ya integrado no se duplica.</p>
+          </div>
+
+          <div class="rounded-xl border border-[#E8EDF4] bg-[#F7F9FC] p-4 text-sm">
+            @if (manifiestoOrigen(); as origen) {
+              <p class="text-[#293954]" data-testid="origen-cargado">
+                Manifiesto original disponible ({{ origen.items.length }} ítems){{ origenDesdeCache() ? ' (guardado al importar en esta pestaña)' : '' }}.
+              </p>
+            } @else {
+              <p class="mb-2 text-amber-800" data-testid="origen-faltante">
+                El informe no incluye los datos de cada ítem (CI, estudio, fecha…). Cargue el manifiesto original del lote para armar el reintento.
+              </p>
+            }
+            <label for="manifiesto-origen" class="mb-1 block text-gray-600">{{ manifiestoOrigen() ? 'Cargar otro manifiesto (.json)' : 'Cargar el manifiesto original (.json)' }}</label>
+            <input id="manifiesto-origen" #entradaOrigen type="file" accept=".json,application/json" (change)="alCargarManifiestoOrigen(entradaOrigen)" [disabled]="reintentando()"
+              class="block w-full text-sm text-gray-600 file:mr-3 file:rounded-lg file:border-0 file:bg-teal-50 file:px-3 file:py-2 file:font-semibold file:text-[#049CAB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" />
+            <label for="manifiesto-origen-texto" class="mb-1 mt-3 block text-gray-600">…o pegue su contenido</label>
+            <textarea id="manifiesto-origen-texto" #areaOrigen rows="3" spellcheck="false" (input)="aplicarManifiestoOrigen(areaOrigen.value)" [disabled]="reintentando()"
+              class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2 font-mono text-xs focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"></textarea>
+            @if (errorManifiestoOrigen(); as mensaje) {
+              <p class="mt-1 text-sm text-rose-700" role="alert" data-testid="error-manifiesto-origen">{{ mensaje }}</p>
+            }
+          </div>
+
+          <ul class="divide-y divide-[#E8EDF4] rounded-xl border border-[#E8EDF4]" data-testid="lista-reintento">
+            @for (i of itemsEnError(); track i.id_externo) {
+              <li class="flex flex-col gap-2 p-3 sm:flex-row sm:items-center sm:justify-between" data-testid="item-reintentable">
+                <div class="min-w-0 text-sm">
+                  <p class="font-medium text-[#293954]">{{ i.id_externo }}</p>
+                  <p class="text-xs text-rose-700">{{ detalleDe(i).mensaje }}</p>
+                </div>
+                <div class="flex items-center gap-2">
+                  @if (correcciones()[i.id_externo]; as archivo) {
+                    <span class="truncate text-xs text-gray-600" data-testid="archivo-corregido">{{ archivo.name }} ({{ formatearTamano(archivo.size) }})</span>
+                    <button type="button" (click)="quitarCorreccion(i.id_externo)" [disabled]="reintentando()" [attr.aria-label]="'Quitar el archivo corregido de ' + i.id_externo"
+                      class="rounded-md px-2 py-0.5 text-xs text-rose-700 hover:bg-rose-50 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">Quitar</button>
+                  } @else {
+                    <label [for]="'correccion-' + i.id_externo" class="text-xs text-gray-600">Archivo corregido</label>
+                    <input [id]="'correccion-' + i.id_externo" #entradaCorreccion type="file" [accept]="acceptArchivos" [disabled]="reintentando()"
+                      (change)="alElegirCorreccion(i.id_externo, entradaCorreccion)" data-testid="entrada-correccion"
+                      class="w-56 text-xs text-gray-600 file:mr-2 file:rounded-md file:border-0 file:bg-teal-50 file:px-2 file:py-1 file:font-semibold file:text-[#049CAB] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" />
+                  }
+                </div>
+              </li>
+            }
+          </ul>
+
+          <div aria-live="polite">
+            @if (preparacion().errores.length > 0) {
+              <ul class="list-disc space-y-0.5 rounded-xl border border-rose-200 bg-rose-50 p-4 pl-8 text-sm text-rose-800" data-testid="errores-reintento">
+                @for (e of preparacion().errores; track $index) { <li>{{ e }}</li> }
+              </ul>
+            }
+            @for (a of preparacion().avisos; track $index) {
+              <p class="mt-2 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">{{ a }}</p>
+            }
+          </div>
+
+          @if (reintentando()) {
+            <div data-testid="progreso-reintento" aria-live="polite">
+              @if (progreso(); as p) {
+                <div class="mb-1 flex justify-between text-xs text-gray-600">
+                  <span>{{ p.porcentaje !== null && p.porcentaje >= 100 ? 'Procesando en el servidor…' : 'Subiendo archivos…' }}</span>
+                  <span>{{ p.porcentaje !== null ? p.porcentaje + ' %' : '' }}</span>
+                </div>
+                <div class="h-2 w-full overflow-hidden rounded-full bg-gray-200" role="progressbar" aria-label="Progreso de la subida" aria-valuemin="0" aria-valuemax="100" [attr.aria-valuenow]="p.porcentaje">
+                  <div class="h-full bg-[#049CAB] transition-all" [style.width.%]="p.porcentaje ?? 5"></div>
+                </div>
+              }
+            </div>
+          }
+
+          <div class="flex justify-end">
+            <button type="button" (click)="reintentar()" [disabled]="reintentando() || !preparacion().manifiesto" data-testid="btn-reintentar"
+              class="rounded-xl bg-[#049CAB] px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+              {{ reintentando() ? 'Reintentando…' : 'Reintentar ' + preparacion().archivos.length + ' ítem(s)' }}
+            </button>
+          </div>
+        </section>
+      }
+    }
+  </div>
+</main>

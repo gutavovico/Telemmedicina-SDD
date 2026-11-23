@@ -1,0 +1,244 @@
+import bcrypt
+# Fix passlib compatibility with bcrypt >= 4.0.0
+if not hasattr(bcrypt, "__about__"):
+    bcrypt.__about__ = type("about", (), {"__version__": getattr(bcrypt, "__version__", "4.0.0")})
+
+import hashlib
+import hmac
+import secrets
+import string
+import time
+import uuid
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, Optional
+from jose import JWTError, jwt
+from passlib.context import CryptContext
+from fastapi import HTTPException, status
+from cryptography.fernet import Fernet, InvalidToken
+from app.core.config import settings
+
+# Password hashing context
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+
+def hash_password(password: str) -> str:
+    """Hash a plaintext password using bcrypt."""
+    return pwd_context.hash(password)
+
+
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """Verify a plaintext password against a hashed password."""
+    return pwd_context.verify(plain_password, hashed_password)
+
+
+def generate_temporary_password(length: int = 16) -> str:
+    """Genera una contraseña temporal aleatoria y fácil de copiar."""
+    alphabet = string.ascii_letters + string.digits + "!@#$%"
+    while True:
+        password = "".join(secrets.choice(alphabet) for _ in range(length))
+        if (
+            any(c.islower() for c in password)
+            and any(c.isupper() for c in password)
+            and any(c.isdigit() for c in password)
+            and any(c in "!@#$%" for c in password)
+        ):
+            return password
+
+
+def _temporary_credential_fernet() -> Fernet:
+    """Cifra credenciales temporales con una clave de servidor estable."""
+    configured = settings.TEMP_CREDENTIAL_ENCRYPTION_KEY.strip()
+    if configured:
+        try:
+            return Fernet(configured.encode("ascii"))
+        except (ValueError, UnicodeError):
+            raise RuntimeError("TEMP_CREDENTIAL_ENCRYPTION_KEY no es una clave Fernet válida") from None
+
+    digest = hashlib.sha256(
+        f"telemedicina:temp-credential:{settings.JWT_SECRET_KEY}".encode("utf-8")
+    ).digest()
+    return Fernet(__import__("base64").urlsafe_b64encode(digest))
+
+
+def encrypt_temporary_credential(value: str) -> str:
+    return _temporary_credential_fernet().encrypt(value.encode("utf-8")).decode("ascii")
+
+
+def decrypt_temporary_credential(value: str) -> Optional[str]:
+    try:
+        return _temporary_credential_fernet().decrypt(value.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError, UnicodeError):
+        return None
+
+
+def new_jti() -> str:
+    """Generate the unique identifier that identifies a session (CU23).
+
+    El par de tokens emitido en un login comparte el mismo `jti`, de modo que
+    acceso y refresh identifican la MISMA sesion y basta revocar uno para
+    cerrar esa sesion.
+    """
+    return uuid.uuid4().hex
+
+
+def _base_claims(data: Dict[str, Any], token_type: str) -> Dict[str, Any]:
+    """Claims comunes a ambos tokens.
+
+    CU01 exige que el token incorpore `token_version`, y CU23 necesita `jti`
+    para poder revocar una sesion concreta en lugar de cerrar todas las del
+    usuario. Si el token ya trae un `jti` (renovacion), se conserva para que
+    la renovacion no cree una sesion nueva por accidente.
+    """
+    to_encode = data.copy()
+    to_encode.setdefault("jti", new_jti())
+    to_encode.setdefault("token_version", 0)
+    to_encode["type"] = token_type
+    return to_encode
+
+
+def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create a short-lived access token."""
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
+
+    to_encode = _base_claims(data, "access")
+    to_encode["exp"] = expire
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return encoded_jwt
+
+
+def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Create a long-lived refresh token."""
+    if expires_delta:
+        expire = datetime.now(timezone.utc) + expires_delta
+    else:
+        expire = datetime.now(timezone.utc) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
+
+    # Comparte jti con el access token si la sesion ya existe: la renovacion
+    # debe seguir apuntando a la misma sesion, no crear una nueva.
+    to_encode = _base_claims(data, "refresh")
+    to_encode["exp"] = expire
+    encoded_jwt = jwt.encode(to_encode, settings.JWT_REFRESH_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
+    return encoded_jwt
+
+
+def decode_access_token(token: str) -> Dict[str, Any]:
+    """Decode and validate a JWT access token."""
+    try:
+        payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "access":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Token no válido (tipo incorrecto)",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+def decode_refresh_token(token: str) -> Dict[str, Any]:
+    """Decode and validate a JWT refresh token."""
+    try:
+        payload = jwt.decode(token, settings.JWT_REFRESH_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        if payload.get("type") != "refresh":
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Refresh token no válido",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        return payload
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Refresh token inválido o expirado",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+
+# ---------------------------------------------------------------------------
+# Recuperación de contraseña por código de 6 dígitos (CU23)
+# El código se deriva con HMAC-SHA256 usando el id del usuario, un secreto y
+# una ventana de tiempo (bucket). No requiere tablas ni migraciones.
+# ---------------------------------------------------------------------------
+
+_RESET_ATTEMPTS: Dict[int, Dict[str, Any]] = {}
+
+
+def _reset_bucket(now_ts: int, ttl_seconds: int) -> int:
+    """Devuelve el bucket (ventana) al que pertenece el instante dado."""
+    return now_ts // ttl_seconds
+
+
+def _reset_code_for_bucket(user_id: int, bucket: int) -> str:
+    """Genera el código de 6 dígitos para un usuario en un bucket concreto."""
+    message = f"{user_id}:{bucket}".encode("utf-8")
+    digest = hmac.new(
+        settings.JWT_RESET_SECRET_KEY.encode("utf-8"),
+        message,
+        hashlib.sha256,
+    ).hexdigest()
+    # Convierte parte del digest en un entero de 6 dígitos (000000-999999)
+    return f"{int(digest[:8], 16) % 1000000:06d}"
+
+
+def _codes_match(provided: str, expected: str) -> bool:
+    """Comparación de códigos en tiempo constante."""
+    return hmac.compare_digest(provided.encode("utf-8"), expected.encode("utf-8"))
+
+
+def _check_reset_lockout(user_id: int) -> None:
+    """Si el usuario está en periodo de bloqueo, rechaza la verificación."""
+    attempt = _RESET_ATTEMPTS.get(user_id)
+    if not attempt:
+        return
+    failed = attempt.get("failed", 0)
+    lock_until = attempt.get("lock_until")
+    if failed >= settings.RESET_CODE_MAX_ATTEMPTS and lock_until:
+        if time.time() < lock_until:
+            minutes_left = int((lock_until - time.time()) // 60) + 1
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=f"Demasiados intentos fallidos. Intenta de nuevo en {minutes_left} min.",
+            )
+        # El bloqueo ya venció: reinicia el contador
+        _RESET_ATTEMPTS.pop(user_id, None)
+
+
+def generate_reset_code(user_id: int) -> str:
+    """Genera el código de recuperación vigente para un usuario."""
+    now_ts = int(time.time())
+    bucket = _reset_bucket(now_ts, settings.RESET_CODE_TTL_MINUTES * 60)
+    return _reset_code_for_bucket(user_id, bucket)
+
+
+def verify_reset_code(user_id: int, code: str) -> bool:
+    """Valida el código en la ventana actual o en la anterior (tolerancia)."""
+    if not code or not code.isdigit() or len(code) != 6:
+        return False
+
+    _check_reset_lockout(user_id)
+
+    now_ts = int(time.time())
+    bucket = _reset_bucket(now_ts, settings.RESET_CODE_TTL_MINUTES * 60)
+    candidates = [
+        _reset_code_for_bucket(user_id, bucket),
+        _reset_code_for_bucket(user_id, bucket - 1),
+    ]
+
+    if any(_codes_match(code, candidate) for candidate in candidates):
+        _RESET_ATTEMPTS.pop(user_id, None)
+        return True
+
+    # Registra intento fallido para el bloqueo anti fuerza bruta
+    attempt = _RESET_ATTEMPTS.setdefault(user_id, {"failed": 0, "lock_until": None})
+    attempt["failed"] = attempt.get("failed", 0) + 1
+    if attempt["failed"] >= settings.RESET_CODE_MAX_ATTEMPTS:
+        attempt["lock_until"] = time.time() + settings.RESET_CODE_LOCKOUT_MINUTES * 60
+    return False

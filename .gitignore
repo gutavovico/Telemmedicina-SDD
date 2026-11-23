@@ -1,7 +1,3 @@
-# Ignorar repositorios hijos para mantenerlos independientes
-/backend_Telemedicina/
-/frontend_Telemedicina/
-/mobile_telemedicina/
 /.sdd/
 
 # Dependencias y logs

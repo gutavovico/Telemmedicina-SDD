@@ -1,0 +1,39 @@
+/* Admin Layout specific transitions & styles */
+:host {
+  display: block;
+  min-height: 100vh;
+}
+
+.tema-panel .panel-sidebar {
+  background-color: var(--tema-principal);
+  color: var(--tema-en-principal);
+}
+
+.tema-panel .panel-sidebar :is(.text-white, [class*='text-white/'], .text-secondary-fixed) {
+  color: var(--tema-en-principal);
+}
+
+.tema-panel .panel-sidebar :is(a, button):hover {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.tema-panel .panel-sidebar nav .panel-link-active {
+  background-color: var(--tema-secundario);
+  color: var(--tema-en-secundario);
+  border-inline-start-color: var(--tema-en-secundario);
+  box-shadow: inset 0 0 0 1px currentColor;
+}
+
+.tema-panel .panel-sidebar :is(a, button):focus-visible {
+  outline: 2px solid var(--tema-en-principal);
+  outline-offset: 2px;
+}
+
+.tema-panel .panel-sidebar-header {
+  border-block-end: 2px solid var(--tema-secundario);
+}
+
+.panel-indicator {
+  border-block-end: 2px solid var(--tema-acento, transparent);
+}

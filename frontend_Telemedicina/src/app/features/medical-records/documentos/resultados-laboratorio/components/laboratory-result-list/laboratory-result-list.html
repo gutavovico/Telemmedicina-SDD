@@ -1,0 +1,153 @@
+<main class="min-h-[calc(100vh-140px)] bg-[#F0F5FB] py-8 px-4 sm:px-6 lg:px-8">
+  <div class="mx-auto max-w-7xl space-y-6">
+    <header class="flex flex-col gap-4 rounded-2xl border border-[#E8EDF4] bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
+      <div class="flex items-center gap-3">
+        <div class="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-[#049CAB]">
+          <span class="material-symbols-outlined text-[24px]" aria-hidden="true">biotech</span>
+        </div>
+        <div>
+          <h1 class="text-2xl font-bold text-[#293954]">Resultados de laboratorio</h1>
+          <p class="text-sm text-gray-500">Resultados incorporados al expediente de los pacientes de su clínica.</p>
+        </div>
+      </div>
+      <div class="flex flex-wrap gap-3">
+        @if (acceso.puedeRevisar()) {
+          <a routerLink="/admin/resultados-laboratorio/revision" data-testid="enlace-revision"
+            class="inline-flex items-center gap-2 rounded-xl border border-amber-300 bg-amber-50 px-4 py-2 text-sm font-semibold text-amber-800 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">pending_actions</span>
+            Revisión de pendientes
+          </a>
+        }
+        @if (acceso.puedeSincronizar()) {
+          <a routerLink="/admin/resultados-laboratorio/sincronizaciones" data-testid="enlace-sincronizaciones"
+            class="inline-flex items-center gap-2 rounded-xl border border-[#D5DDE8] bg-white px-4 py-2 text-sm font-semibold text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">sync_alt</span>
+            Sincronizaciones
+          </a>
+        }
+        @if (acceso.puedeCrear()) {
+          <a routerLink="/admin/resultados-laboratorio/nuevo" data-testid="enlace-nuevo"
+            class="inline-flex items-center gap-2 rounded-xl bg-[#049CAB] px-4 py-2 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">
+            <span class="material-symbols-outlined text-[18px]" aria-hidden="true">upload_file</span>
+            Cargar resultado
+          </a>
+        }
+      </div>
+    </header>
+
+    <section aria-label="Filtros" class="rounded-2xl border border-[#E8EDF4] bg-white p-4 shadow-sm sm:p-5">
+      <form [formGroup]="filtros" (ngSubmit)="filtrar()" class="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div class="sm:col-span-2">
+          <app-lab-patient-picker inputId="filtro-paciente" etiqueta="Paciente" (pacienteSeleccionado)="alElegirPaciente($event)" />
+        </div>
+        <div>
+          <label for="filtro-estudio" class="mb-1 block text-sm font-medium text-[#293954]">Código del estudio</label>
+          <input id="filtro-estudio" type="text" formControlName="codigo_examen" maxlength="50" placeholder="Ej.: HEMOGRAMA"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+        </div>
+        <div>
+          <label for="filtro-laboratorio" class="mb-1 block text-sm font-medium text-[#293954]">Laboratorio de origen</label>
+          <input id="filtro-laboratorio" type="text" formControlName="laboratorio_origen" maxlength="200"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+        </div>
+        <div>
+          <label for="filtro-origen" class="mb-1 block text-sm font-medium text-[#293954]">Origen</label>
+          <select id="filtro-origen" formControlName="origen"
+            class="w-full rounded-xl border border-[#D5DDE8] bg-white px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]">
+            <option value="">Todos</option>
+            <option value="MANUAL">Carga manual</option>
+            <option value="SINCRONIZADO">Sincronizado</option>
+          </select>
+        </div>
+        @if (acceso.puedeRevisar()) {
+          <div>
+            <label for="filtro-estado" class="mb-1 block text-sm font-medium text-[#293954]">Estado</label>
+            <select id="filtro-estado" formControlName="estado" data-testid="filtro-estado"
+              class="w-full rounded-xl border border-[#D5DDE8] bg-white px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]">
+              <option value="">Incorporados</option>
+              <option value="PENDIENTE_REVISION">Pendientes de revisión</option>
+              <option value="ANULADO">Anulados</option>
+            </select>
+          </div>
+        }
+        <div>
+          <label for="filtro-desde" class="mb-1 block text-sm font-medium text-[#293954]">Realizado desde</label>
+          <input id="filtro-desde" type="date" formControlName="fecha_desde"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+        </div>
+        <div>
+          <label for="filtro-hasta" class="mb-1 block text-sm font-medium text-[#293954]">Realizado hasta</label>
+          <input id="filtro-hasta" type="date" formControlName="fecha_hasta"
+            class="w-full rounded-xl border border-[#D5DDE8] px-3 py-2.5 text-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]" />
+        </div>
+        <div class="flex items-end gap-3 sm:col-span-2 lg:col-span-4">
+          <button type="submit" class="rounded-xl bg-[#049CAB] px-5 py-2.5 text-sm font-semibold text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#049CAB]">Buscar</button>
+          <button type="button" (click)="limpiar()" class="rounded-xl border border-[#D5DDE8] px-5 py-2.5 text-sm font-medium text-[#293954] focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Limpiar</button>
+          @if (rangoInvalido()) {
+            <p class="text-xs text-rose-700" role="alert">La fecha inicial no puede ser posterior a la final.</p>
+          }
+        </div>
+      </form>
+    </section>
+
+    <div aria-live="polite" class="min-h-[1.25rem]">
+      @if (error(); as mensaje) {
+        <div class="flex items-center justify-between rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-800" role="alert" data-testid="error-listado">
+          <span>{{ mensaje }}</span>
+          <button type="button" (click)="cargar(pagina())" class="underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-rose-700">Reintentar</button>
+        </div>
+      }
+    </div>
+
+    <section class="overflow-hidden rounded-2xl border border-[#E8EDF4] bg-white shadow-sm" [attr.aria-busy]="cargando()">
+      @if (cargando()) {
+        <p class="p-8 text-center text-sm text-gray-500" role="status" data-testid="cargando">Cargando resultados…</p>
+      } @else if (items().length === 0 && !error()) {
+        <div class="p-10 text-center" data-testid="vacio">
+          <span class="material-symbols-outlined text-[40px] text-gray-300" aria-hidden="true">science</span>
+          <p class="mt-2 text-sm text-gray-500">No hay resultados que coincidan con los filtros.</p>
+        </div>
+      } @else if (items().length > 0) {
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-[#E8EDF4] text-sm">
+            <caption class="sr-only">Resultados de laboratorio de la clínica</caption>
+            <thead class="bg-[#F7F9FC] text-left text-xs font-semibold uppercase tracking-wide text-gray-500">
+              <tr>
+                <th scope="col" class="px-4 py-3">Fecha de realización</th>
+                <th scope="col" class="px-4 py-3">Paciente</th>
+                <th scope="col" class="px-4 py-3">Estudio</th>
+                <th scope="col" class="px-4 py-3">Laboratorio</th>
+                <th scope="col" class="px-4 py-3">Origen</th>
+                <th scope="col" class="px-4 py-3">Estado</th>
+                <th scope="col" class="px-4 py-3"><span class="sr-only">Acciones</span></th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-[#E8EDF4]">
+              @for (r of items(); track r.id_resultado) {
+                <tr class="hover:bg-[#F7F9FC]" data-testid="fila-resultado">
+                  <td class="whitespace-nowrap px-4 py-3 text-[#293954]">{{ r.fecha_realizacion }}</td>
+                  <td class="px-4 py-3 text-[#293954]">{{ r.paciente_nombre || 'Sin paciente asignado' }}</td>
+                  <td class="px-4 py-3 text-[#293954]">{{ r.nombre_examen || r.codigo_examen }} <span class="text-xs text-gray-400">({{ r.codigo_examen }})</span></td>
+                  <td class="px-4 py-3 text-[#293954]">{{ r.laboratorio_origen }}</td>
+                  <td class="px-4 py-3 text-gray-600">{{ r.origen === 'MANUAL' ? 'Carga manual' : 'Sincronizado' }}</td>
+                  <td class="px-4 py-3"><app-lab-result-status-badge [estado]="r.estado" /></td>
+                  <td class="px-4 py-3 text-right">
+                    <a [routerLink]="['/admin/resultados-laboratorio', r.id_resultado]" class="font-semibold text-[#049CAB] underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]"
+                      [attr.aria-label]="'Ver detalle del resultado de ' + (r.nombre_examen || r.codigo_examen)">Ver detalle</a>
+                  </td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+        <nav aria-label="Paginación" class="flex items-center justify-between border-t border-[#E8EDF4] px-4 py-3 text-sm text-gray-600">
+          <span>{{ total() }} resultado(s) · página {{ pagina() }} de {{ totalPaginas() }}</span>
+          <span class="flex gap-2">
+            <button type="button" [disabled]="pagina() <= 1" (click)="cargar(pagina() - 1)" class="rounded-lg border border-[#D5DDE8] px-3 py-1.5 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Anterior</button>
+            <button type="button" [disabled]="pagina() >= totalPaginas()" (click)="cargar(pagina() + 1)" class="rounded-lg border border-[#D5DDE8] px-3 py-1.5 disabled:opacity-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]">Siguiente</button>
+          </span>
+        </nav>
+      }
+    </section>
+  </div>
+</main>

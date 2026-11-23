@@ -6,16 +6,16 @@ Guía para Claude Code en este repositorio. Las reglas normativas completas est�
 
 Plataforma SaaS multitenant de telemedicina (Shared Database, Shared Schema en PostgreSQL/Neon). Tres clientes sobre una sola API:
 
-| Carpeta | Stack | Repo remoto |
-|---|---|---|
-| `backend_Telemedicina/` | FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2 | `gutavovico/backend_Telemedicina` |
-| `frontend_Telemedicina/` | Angular 21 standalone + Signals + Tailwind, Cypress | `gutavovico/frontend_Telemedicina` |
-| `mobile_telemedicina/` | Flutter, Clean Architecture (`lib/features/<dominio>/{data,domain,presentation}`) | `gutavovico/mobile_telemedicina` |
-| raíz (`openspec/`, docs) | OpenSpec: specs, contratos, changes | `gutavovico/Telemmedicina-SDD` |
+| Carpeta | Stack |
+|---|---|
+| `backend_Telemedicina/` | FastAPI, SQLAlchemy 2.0, Alembic, Pydantic v2 |
+| `frontend_Telemedicina/` | Angular 21 standalone + Signals + Tailwind, Cypress |
+| `mobile_telemedicina/` | Flutter, Clean Architecture (`lib/features/<dominio>/{data,domain,presentation}`) |
+| raíz (`openspec/`, docs) | OpenSpec: specs, contratos, changes |
 
-**Son 4 repos git independientes.** El `.gitignore` de la raíz excluye las tres carpetas de código, así que `git` en la raíz solo ve `openspec/`, docs y archivos de agentes. Cada subrepo trae además un submódulo `specs/` (apunta a Telemmedicina-SDD, queda en HEAD desacoplado; no lo edites ahí, edita `openspec/` en la raíz).
+**Es un monorepo** (`gutavovico/Telemmedicina-SDD`): backend, frontend, móvil y `openspec/` viven en un solo repositorio git. Ya no hay subrepos ni submódulos `specs/`; las specs y contratos se editan solo en `openspec/` de la raíz. Los repos antiguos `gutavovico/backend_Telemedicina`, `frontend_Telemedicina` y `mobile_telemedicina` quedan archivados (solo lectura) y conservan su historial previo a la migración (que también está importado aquí). El CI está en `.github/workflows/` (`backend.yml`, `frontend.yml`, `mobile.yml`), con filtro `paths:` por carpeta.
 
-Rama de trabajo de Gustavo: `Gustavo` en cada repo; se integra con `main` mediante merge (`Merge branch 'main' into Gustavo`) y PRs de ramas `feature/cuXX-...`.
+Rama de trabajo de Gustavo: `Gustavo`; se integra con `main` mediante merge (`Merge branch 'main' into Gustavo`) y PRs de ramas `feature/cuXX-...`. Un mismo PR puede tocar varias carpetas (p. ej. `openspec/` + backend + frontend + móvil) y debe seguir el flujo SDD.
 
 ## Regla de oro: SDD
 
@@ -78,6 +78,6 @@ flutter analyze
 
 Features en `lib/features/` (auth, appointments, cola_virtual, communications, medical_records, payments, teleconsulta, treatments, analytics, ai_assistant, home). Modelos con `fromJson/toJson` alineados al contrato; tokens y `tenant_id` en `FlutterSecureStorage`.
 
-## Sincronizar repos
+## Sincronizar
 
-Para traer cambios remotos hay que hacerlo **por cada repo** (`git fetch --all --prune` en la raíz y en cada subrepo; los `specs/` de los subrepos fallan al fetch si el gitlink apunta a un commit no publicado: es ruido, no un error real). Antes de mergear confirma que el árbol de trabajo esté limpio. `SI2-Grupo3.md` (≈20 MB) en la raíz es un documento fuente: no lo abras entero ni lo leas completo.
+Basta un solo `git fetch --all --prune` en la raíz. Antes de mergear confirma que el árbol de trabajo esté limpio. Los comandos de las secciones Backend, Web y Móvil se ejecutan **desde su carpeta** (`cd backend_Telemedicina`, etc.). `SI2-Grupo3.md` (≈20 MB) en la raíz es un documento fuente: no lo abras entero ni lo leas completo.

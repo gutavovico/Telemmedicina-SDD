@@ -1,0 +1,79 @@
+<div class="relative">
+  <label [for]="inputId()" class="mb-1 block text-sm font-medium text-[#293954]">
+    {{ etiqueta() }}
+    @if (requerido()) {
+      <span class="text-rose-600" aria-hidden="true">*</span>
+      <span class="sr-only">(obligatorio)</span>
+    }
+  </label>
+
+  <div class="relative">
+    <span class="material-symbols-outlined pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-[20px] text-gray-400" aria-hidden="true">person_search</span>
+    <input
+      [id]="inputId()"
+      type="text"
+      autocomplete="off"
+      role="combobox"
+      aria-autocomplete="list"
+      [attr.aria-expanded]="abierto()"
+      [attr.aria-controls]="inputId() + '-lista'"
+      [attr.aria-activedescendant]="activo() >= 0 ? idOpcion(activo()) : null"
+      [attr.aria-invalid]="error() ? 'true' : null"
+      [attr.aria-describedby]="error() ? inputId() + '-error' : null"
+      [attr.aria-required]="requerido() ? 'true' : null"
+      placeholder="Buscar por nombre, apellido o CI"
+      class="w-full rounded-xl border bg-white py-2.5 pl-10 pr-10 text-sm text-[#293954] focus:outline-none focus-visible:ring-2 focus-visible:ring-[#049CAB]"
+      [class.border-rose-400]="error()"
+      [class.border-[#D5DDE8]]="!error()"
+      [ngModel]="consulta()"
+      (ngModelChange)="alEscribir($event)"
+      (keydown)="alTeclear($event)"
+    />
+    @if (cargando()) {
+      <span class="material-symbols-outlined absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-[18px] text-gray-400" aria-hidden="true">progress_activity</span>
+    }
+  </div>
+
+  @if (abierto()) {
+    <ul
+      [id]="inputId() + '-lista'"
+      role="listbox"
+      [attr.aria-label]="'Resultados de la búsqueda de pacientes'"
+      class="absolute z-20 mt-1 max-h-64 w-full overflow-auto rounded-xl border border-[#E8EDF4] bg-white py-1 shadow-lg"
+    >
+      @for (paciente of resultados(); track paciente.id_paciente; let i = $index) {
+        <li
+          [id]="idOpcion(i)"
+          role="option"
+          [attr.aria-selected]="activo() === i"
+          class="cursor-pointer px-3 py-2 text-sm text-[#293954] hover:bg-teal-50"
+          [class.bg-teal-50]="activo() === i"
+          (mousedown)="$event.preventDefault(); elegir(paciente)"
+        >
+          <span class="font-medium">{{ paciente.nombres }} {{ paciente.apellidos }}</span>
+          <span class="ml-2 text-gray-500">CI {{ paciente.ci }}</span>
+        </li>
+      } @empty {
+        <li class="px-3 py-2 text-sm text-gray-500" role="option" aria-disabled="true" [attr.aria-selected]="false">
+          No se encontraron pacientes.
+        </li>
+      }
+    </ul>
+  }
+
+  <div aria-live="polite" class="min-h-[1.25rem]">
+    @if (elegido(); as paciente) {
+      <p class="mt-1 flex items-center gap-2 text-xs text-emerald-700" data-testid="paciente-elegido">
+        <span class="material-symbols-outlined text-[16px]" aria-hidden="true">check_circle</span>
+        Paciente seleccionado: {{ paciente.nombres }} {{ paciente.apellidos }} (CI {{ paciente.ci }})
+        <button type="button" class="underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-[#049CAB]" (click)="quitar()">Quitar</button>
+      </p>
+    }
+    @if (errorBusqueda(); as mensaje) {
+      <p class="mt-1 text-xs text-rose-700" role="alert">{{ mensaje }}</p>
+    }
+  </div>
+  @if (error(); as mensaje) {
+    <p [id]="inputId() + '-error'" class="text-xs text-rose-700" role="alert" aria-live="assertive">{{ mensaje }}</p>
+  }
+</div>

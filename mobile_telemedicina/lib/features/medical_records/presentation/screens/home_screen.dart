@@ -1,0 +1,476 @@
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+import '../../../../core/theme/app_colors.dart';
+import '../../../../core/theme/app_typography.dart';
+import '../../../auth/presentation/controllers/auth_controller.dart';
+import '../../../communications/presentation/providers/notificacion_provider.dart';
+
+class HomeScreen extends StatelessWidget {
+  const HomeScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final authController = context.watch<AuthController>();
+    NotificacionProvider? notificacionProvider;
+    try {
+      notificacionProvider = context.watch<NotificacionProvider>();
+    } catch (_) {
+      notificacionProvider = null;
+    }
+    final conteoNoLeidas = notificacionProvider?.conteoNoLeidas ?? 0;
+    final user = authController.currentUser;
+    final isPatient = authController.isPatient;
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.primary,
+        elevation: 0,
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: Colors.white24,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.local_hospital_rounded,
+                color: Colors.white,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'San Juan de Dios',
+                  style: AppTypography.titleMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  'Portal de Telemedicina',
+                  style: AppTypography.bodySmall.copyWith(
+                    color: AppColors.secondaryContainer,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          // CU20: Campana de notificaciones con badge al lado del botón de salir
+          IconButton(
+            key: const Key('home_notifications_bell_btn'),
+            tooltip: 'Notificaciones',
+            onPressed: () {
+              Navigator.of(context).pushNamed('/notificaciones');
+            },
+            icon: Badge(
+              isLabelVisible: conteoNoLeidas > 0,
+              label: Text(
+                '$conteoNoLeidas',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              backgroundColor: const Color(0xFFD9381E),
+              child: const Icon(
+                Icons.notifications_none_rounded,
+                color: Colors.white,
+                size: 28,
+              ),
+            ),
+          ),
+          // Botón compacto de cerrar sesión: solo icono de puerta con personita saliendo
+          Padding(
+            padding: const EdgeInsets.only(right: 8),
+            child: IconButton(
+              key: const Key('home_compact_logout_btn'),
+              tooltip: 'Cerrar sesión',
+              onPressed: () async {
+                final confirm = await showDialog<bool>(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    title: const Text('Cerrar sesión'),
+                    content: const Text(
+                      '¿Estás seguro de que deseas salir de tu cuenta?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(ctx).pop(false),
+                        child: const Text('Cancelar'),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                        ),
+                        onPressed: () => Navigator.of(ctx).pop(true),
+                        child: const Text('Cerrar sesión'),
+                      ),
+                    ],
+                  ),
+                );
+
+                if (confirm == true && context.mounted) {
+                  await context.read<NotificacionProvider>().revocarDispositivoActual();
+                  if (context.mounted) {
+                    await context.read<AuthController>().logout();
+                  }
+                  if (context.mounted) {
+                    Navigator.of(context).pushReplacementNamed('/login');
+                  }
+                }
+              },
+              icon: Container(
+                padding: const EdgeInsets.all(6),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.18),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.exit_to_app_rounded,
+                  color: Colors.white,
+                  size: 20,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Stack(
+        children: [
+          SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Welcome Card
+            InkWell(
+              onTap: isPatient
+                  ? () => Navigator.of(context).pushNamed('/patient-profile')
+                  : null,
+              borderRadius: BorderRadius.circular(20),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: AppColors.primary.withValues(alpha: 0.3),
+                      blurRadius: 14,
+                      offset: const Offset(0, 6),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 26,
+                          backgroundColor: Colors.white,
+                          child: Text(
+                            user != null && user.nombres.isNotEmpty
+                                ? user.nombres.substring(0, 1).toUpperCase()
+                                : 'P',
+                            style: AppTypography.titleLarge.copyWith(
+                              color: AppColors.primary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '¡Hola, ${user?.nombres ?? "Usuario"}!',
+                                style: AppTypography.titleLarge.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                user?.correo ?? '',
+                                style: AppTypography.bodySmall.copyWith(
+                                  color: Colors.white70,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.secondaryContainer,
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            user?.rolNombre?.toUpperCase() ?? 'USUARIO',
+                            style: AppTypography.bodySmall.copyWith(
+                              color: AppColors.primaryDark,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 10,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          const Icon(
+                            Icons.badge_outlined,
+                            color: AppColors.secondaryContainer,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              isPatient
+                                  ? 'Ver y gestionar mi expediente clínico >'
+                                  : 'Las recetas y documentos de pacientes se consultan en el portal web.',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            // Quick Access Section
+            Text(
+              'Servicios Disponibles',
+              style: AppTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+            const SizedBox(height: 14),
+
+            GridView.count(
+              crossAxisCount: 2,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisSpacing: 14,
+              mainAxisSpacing: 14,
+              childAspectRatio: 1.15,
+              children: [
+                if (authController.canAccessReports)
+                  _buildServiceCard(
+                    icon: Icons.bar_chart_rounded,
+                    title: 'Reportes',
+                    subtitle: 'Clínicos y administrativos CU22',
+                    color: AppColors.primary,
+                    onTap: () => Navigator.of(context).pushNamed('/analytics'),
+                  ),
+                _buildServiceCard(
+                  icon: Icons.emergency_outlined,
+                  title: 'Consultas IA',
+                  subtitle: 'Evaluación por IA',
+                  color: const Color(0xFFDC2626),
+                  onTap: () => Navigator.of(context).pushNamed('/triage'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.assignment_outlined,
+                  title: 'Fichas Médicas',
+                  subtitle: 'Emisión y turnos CU09',
+                  color: const Color(0xFF0D9488),
+                  onTap: () => Navigator.of(context).pushNamed('/fichas'),
+                ),
+                if (isPatient) ...[
+                  _buildServiceCard(
+                    icon: Icons.folder_shared_outlined,
+                    title: 'Documentos',
+                    subtitle: 'Tus archivos clínicos',
+                    color: const Color(0xFF2563EB),
+                    onTap: () => Navigator.of(context).pushNamed('/documentos'),
+                  ),
+                  _buildServiceCard(
+                    icon: Icons.medication_outlined,
+                    title: 'Mis recetas',
+                    subtitle: 'Consulta y descarga tus recetas',
+                    color: AppColors.secondary,
+                    onTap: () => Navigator.of(context).pushNamed('/recetas'),
+                  ),
+                  _buildServiceCard(
+                    icon: Icons.psychology_outlined,
+                    title: 'Asistencia IA',
+                    subtitle: 'Alertas y sugerencias de tratamiento',
+                    color: const Color(0xFF0284C7),
+                    onTap: () => Navigator.of(context).pushNamed('/ai-assistant'),
+                  ),
+                  _buildServiceCard(
+                    icon: Icons.healing_rounded,
+                    title: 'Mis Tratamientos',
+                    subtitle: 'Planes médicos y tomas CU17',
+                    color: const Color(0xFF0284C7),
+                    onTap: () =>
+                        Navigator.of(context).pushNamed('/tratamientos'),
+                  ),
+                  // CU19: pago de citas/teleconsultas y comprobantes digitales.
+                  _buildServiceCard(
+                    icon: Icons.receipt_long_outlined,
+                    title: 'Mis pagos',
+                    subtitle: 'Paga tus citas y descarga comprobantes',
+                    color: const Color(0xFF635BFF),
+                    onTap: () => Navigator.of(context).pushNamed('/pagos'),
+                  ),
+                ],
+                _buildServiceCard(
+                  icon: Icons.calendar_month_rounded,
+                  title: 'Mis Citas',
+                  subtitle: 'Consultas agendadas CU15',
+                  color: const Color(0xFFE11D48),
+                  onTap: () => Navigator.of(context).pushNamed('/mis-citas'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.hourglass_top_rounded,
+                  title: 'Mi Turno',
+                  subtitle: 'Fila virtual del día CU08',
+                  color: const Color(0xFF0D9488),
+                  onTap: () => Navigator.of(context).pushNamed('/mi-cola'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.schedule_rounded,
+                  title: 'Mi Lista de Espera',
+                  subtitle: 'Inscripción y reasignación CU07',
+                  color: const Color(0xFF049CAB),
+                  onTap: () => Navigator.of(context).pushNamed('/lista-espera'),
+                ),
+                if (isPatient)
+                  _buildServiceCard(
+                    icon: Icons.person_outline_rounded,
+                    title: 'Mi Expediente',
+                    subtitle: 'Datos clínicos y contacto',
+                    color: AppColors.primary,
+                    onTap: () =>
+                        Navigator.of(context).pushNamed('/patient-profile'),
+                  ),
+                _buildServiceCard(
+                  icon: Icons.medical_services_outlined,
+                  title: 'Directorio Médico',
+                  subtitle: 'Especialistas y catálogo',
+                  color: const Color(0xFF0284C7),
+                  onTap: () => Navigator.of(context).pushNamed('/doctors'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.video_call_rounded,
+                  title: 'Teleconsultas',
+                  subtitle: 'Atención virtual en tiempo real',
+                  color: AppColors.secondary,
+                  onTap: () =>
+                      Navigator.of(context).pushNamed('/communications'),
+                ),
+                _buildServiceCard(
+                  icon: Icons.chat_bubble_outline_rounded,
+                  title: 'Asistente IA',
+                  subtitle: 'Orientación médica 24/7',
+                  color: const Color(0xFF7C3AED),
+                  onTap: () => Navigator.of(context).pushNamed('/ai-assistant'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildServiceCard({
+    required IconData icon,
+    required String title,
+    required String subtitle,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(18),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.divider, width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(icon, color: color, size: 24),
+            ),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: AppTypography.titleMedium.copyWith(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  subtitle,
+                  style: AppTypography.bodySmall.copyWith(
+                    fontSize: 11,
+                    color: AppColors.textMuted,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
