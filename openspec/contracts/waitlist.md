@@ -1,6 +1,6 @@
 # Contrato de API REST: Lista de Espera (CU07)
 
-**Versión del Contrato:** 1.0.0 (SaaS Multitenant)
+**Versión del Contrato:** 1.1.0 (SaaS Multitenant)
 **Estándar:** OpenAPI 3.1 / RESTful JSON
 **Rutas Base:** `/lista-espera` y `/api/v1/lista-espera` (web y móvil consumen `/api/v1/lista-espera`)
 **Seguridad Global:** `BearerAuth` (`Authorization: Bearer <JWT_ACCESS_TOKEN>`)
@@ -129,12 +129,13 @@
 
 ## 4. Notificaciones
 
-| Campo | Valor |
-|---|---|
-| `tipo` | `TURNO_REASIGNADO` |
-| `canal` | `PUSH` |
-| `titulo` | `Turno disponible` |
-| `mensaje` | `Se liberó un turno con {médico} el {fecha} a las {hora}. Confirma o rechaza en tu lista de espera.` |
-| `estado` | `PENDIENTE` |
+| Momento | `tipo` | `titulo` | `mensaje` |
+|---|---|---|---|
+| Se ofrece el cupo | `TURNO_REASIGNADO` | `Turno disponible` | `Se liberó un turno con {médico} el {fecha} a las {hora}. Confirma o rechaza en tu lista de espera.` |
+| Paciente confirma | `TURNO_CONFIRMADO` | `Turno confirmado` | `Confirmaste tu turno con {médico} el {fecha} a las {hora}.` |
+| Paciente rechaza | `TURNO_RECHAZADO` | `Turno rechazado` | `Rechazaste el turno con {médico} el {fecha} a las {hora}. El cupo se ofrecerá al siguiente paciente.` |
 
-El push FCM es best-effort: si el proveedor no está configurado o falla, la notificación en base de datos y la reasignación se mantienen.
+* **Canal:** `PUSH` en los tres casos; `categoria = CITAS`, `recurso_tipo = LISTA_ESPERA`, `enlace_accion = /lista-espera`.
+* **Estado:** `PENDIENTE` hasta que el paciente la lea en la bandeja.
+* La APK muestra la alerta nativa desde la bandeja (polling de CU20) y abre `/lista-espera` al tocarla.
+* El push FCM es best-effort: si el proveedor no está configurado o falla, la notificación en base de datos y la reasignación se mantienen.
